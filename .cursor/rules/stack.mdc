@@ -1,0 +1,10 @@
+---
+description: Stack and conventions for the Scrum poker TFM
+alwaysApply: true
+---
+
+- TypeScript strict in `shared`, `backend`, and `frontend`.
+- No Firebase. Realtime is Socket.IO + Redis.
+- Event names, card values, and room types live in `shared/` (`@scrum-poker/shared`) only.
+- Vue 3 Composition API + `<script setup>`. Fastify on the server.
+- UI language: Spanish.
