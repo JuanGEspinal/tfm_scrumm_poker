@@ -24,14 +24,16 @@
         @select="store.vote"
       />
 
-      <UserBoard :users="store.state.users" :revealed="store.revealed" />
+      <div class="room-results">
+        <UserBoard :users="store.state.users" :revealed="store.revealed" />
 
-      <div class="actions">
-        <button type="button" :disabled="store.revealed" @click="store.reveal">Revelar</button>
-        <button type="button" class="secondary" @click="store.resetRound">Nueva ronda</button>
+        <div class="actions">
+          <button type="button" :disabled="store.revealed" @click="store.reveal">Revelar</button>
+          <button type="button" class="secondary" @click="store.resetRound">Nueva ronda</button>
+        </div>
+
+        <AveragePanel :visible="store.revealed" :value="store.state.average" />
       </div>
-
-      <AveragePanel :visible="store.revealed" :value="store.state.average" />
     </template>
 
     <p v-else class="muted">Conectando con la sala…</p>

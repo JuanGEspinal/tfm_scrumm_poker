@@ -1,6 +1,6 @@
 <template>
-  <fieldset class="avatar-picker">
-    <legend>Elige tu avatar</legend>
+  <div class="avatar-picker" role="group" aria-labelledby="avatar-picker-title">
+    <p id="avatar-picker-title" class="avatar-picker-title">Elige tu avatar</p>
     <p class="muted avatar-help">Si no eliges ninguno, te asignaremos uno al azar.</p>
     <div class="avatar-grid">
       <button
@@ -16,7 +16,7 @@
         <img class="avatar-img" :src="avatar.url" :alt="avatar.id" />
       </button>
     </div>
-  </fieldset>
+  </div>
 </template>
 
 <script setup lang="ts">

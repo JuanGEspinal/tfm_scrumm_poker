@@ -1,8 +1,7 @@
 <template>
-  <main class="page">
+  <main class="page home-page">
     <header>
-      <h1>Scrum poker</h1>
-      <p>Estima las tareas del sprint en una sala compartida.</p>
+      <h1>Scrum poker</h1>      
     </header>
 
     <form class="panel" @submit.prevent>
