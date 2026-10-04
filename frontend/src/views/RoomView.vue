@@ -44,7 +44,7 @@ import { useRoute, useRouter } from "vue-router";
 import CardDeck from "../components/CardDeck.vue";
 import UserBoard from "../components/UserBoard.vue";
 import AveragePanel from "../components/AveragePanel.vue";
-import { getStoredName } from "../session";
+import { getOrAssignAvatar, getStoredName } from "../session";
 import { useRoomStore } from "../stores/room";
 
 const route = useRoute();
@@ -58,7 +58,7 @@ onMounted(() => {
     void router.replace({ name: "home", query: { room: roomId } });
     return;
   }
-  store.join(roomId, name);
+  store.join(roomId, name, getOrAssignAvatar());
 });
 
 onUnmounted(() => {

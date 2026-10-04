@@ -6,10 +6,12 @@ import {
   addUser,
   castVote,
   findUserByName,
+  isAvatarId,
   isValidDisplayName,
   isValidRoomId,
   normalizeDisplayName,
   normalizeRoomId,
+  randomAvatarId,
   rejoinUser,
   removeUser,
   resetRound,
@@ -73,6 +75,7 @@ export function createSocketServer(
           return;
         }
 
+        const avatar = isAvatarId(payload.avatar) ? payload.avatar : randomAvatarId();
         const userId = randomUUID();
         const next = await store.update(roomId, (room) => {
           const existing = findUserByName(room, displayName);
@@ -82,11 +85,11 @@ export function createSocketServer(
             if (timeout) {
               clearTimeout(timeout);
               pendingDisconnect.delete(pendingKey);
-              return rejoinUser(room, existing.id, { id: userId, displayName, vote: null });
+              return rejoinUser(room, existing.id, { id: userId, displayName, avatar, vote: null });
             }
             throw new Error("name_taken");
           }
-          return addUser(room, { id: userId, displayName, vote: null });
+          return addUser(room, { id: userId, displayName, avatar, vote: null });
         });
 
         if (socket.data.roomId) {

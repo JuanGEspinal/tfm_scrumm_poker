@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
 import type { PublicUser } from "@scrum-poker/shared";
+import { avatarUrl } from "../avatars";
 import UserBoard from "./UserBoard.vue";
 
 const users: PublicUser[] = [
-  { id: "a", displayName: "Ana", hasVoted: true, vote: null, isCreator: true },
-  { id: "b", displayName: "Bruno", hasVoted: false, vote: null, isCreator: false },
+  { id: "a", displayName: "Ana", avatar: "bernard", hasVoted: true, vote: null, isCreator: true },
+  { id: "b", displayName: "Bruno", avatar: "stan", hasVoted: false, vote: null, isCreator: false },
 ];
 
 describe("UserBoard", () => {
@@ -16,6 +17,14 @@ describe("UserBoard", () => {
     expect(seats[0]?.classes()).toContain("voted");
     expect(seats[1]?.classes()).not.toContain("voted");
     expect(wrapper.findAll(".seat-value").map((v) => v.text())).toEqual(["—", "—"]);
+  });
+
+  it("shows the avatar on the card front and the name below the card", () => {
+    const wrapper = mount(UserBoard, { props: { users, revealed: false } });
+    const imgs = wrapper.findAll(".seat-front img");
+    expect(imgs.map((img) => img.attributes("src"))).toEqual([avatarUrl("bernard"), avatarUrl("stan")]);
+    expect(wrapper.find(".seat-inner .seat-name").exists()).toBe(false);
+    expect(wrapper.findAll(".seat > .seat-name").map((n) => n.text())).toEqual(["Ana", "Bruno"]);
   });
 
   it("flips and shows votes when revealed", () => {

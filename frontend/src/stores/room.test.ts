@@ -32,7 +32,9 @@ function roomState(phase: RoomState["phase"], anaVoted: boolean): RoomState {
     creatorId: "a",
     phase,
     average: null,
-    users: [{ id: "a", displayName: "Ana", hasVoted: anaVoted, vote: null, isCreator: true }],
+    users: [
+      { id: "a", displayName: "Ana", avatar: "bernard", hasVoted: anaVoted, vote: null, isCreator: true },
+    ],
   };
 }
 
@@ -43,9 +45,18 @@ describe("room store", () => {
     fakeSocket.emitted = [];
   });
 
+  it("sends the chosen avatar when joining", () => {
+    const store = useRoomStore();
+    store.join("sprint-1", "Ana", "lechuck");
+    expect(fakeSocket.emitted).toContainEqual([
+      CLIENT_EVENTS.join,
+      { roomId: "sprint-1", displayName: "Ana", avatar: "lechuck" },
+    ]);
+  });
+
   it("sends the vote and keeps the own card selected", () => {
     const store = useRoomStore();
-    store.join("sprint-1", "Ana");
+    store.join("sprint-1", "Ana", "bernard");
     fakeSocket.receive(SERVER_EVENTS.state, roomState("voting", false));
 
     store.vote("5");
@@ -57,7 +68,7 @@ describe("room store", () => {
 
   it("clears the own card when another user starts a new round", () => {
     const store = useRoomStore();
-    store.join("sprint-1", "Ana");
+    store.join("sprint-1", "Ana", "bernard");
     fakeSocket.receive(SERVER_EVENTS.state, roomState("voting", false));
     store.vote("13");
     fakeSocket.receive(SERVER_EVENTS.state, roomState("revealed", true));

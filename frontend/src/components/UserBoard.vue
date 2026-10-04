@@ -10,15 +10,20 @@
       >
         <div class="seat-inner">
           <div class="seat-face seat-front">
-            <p class="seat-name">{{ user.displayName }}</p>
-            <p v-if="user.isCreator" class="seat-role">Anfitrión</p>
-            <p class="seat-hint">{{ user.hasVoted ? "Carta elegida" : "Esperando" }}</p>
+            <img
+              v-if="avatarUrl(user.avatar)"
+              class="avatar-img"
+              :src="avatarUrl(user.avatar)"
+              :alt="`Avatar de ${user.displayName}`"
+            />
           </div>
           <div class="seat-face seat-back">
-            <p class="seat-name">{{ user.displayName }}</p>
             <p class="seat-value">{{ user.vote ?? "—" }}</p>
           </div>
         </div>
+        <p class="seat-name">{{ user.displayName }}</p>
+        <p v-if="user.isCreator" class="seat-role">Anfitrión</p>
+        <p class="seat-hint">{{ user.hasVoted ? "Carta elegida" : "Esperando" }}</p>
       </article>
     </div>
   </section>
@@ -26,6 +31,7 @@
 
 <script setup lang="ts">
 import type { PublicUser } from "@scrum-poker/shared";
+import { avatarUrl } from "../avatars";
 
 defineProps<{
   users: PublicUser[];

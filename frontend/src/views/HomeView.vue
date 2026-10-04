@@ -10,6 +10,7 @@
         Tu nombre
         <input v-model="name" type="text" maxlength="40" autocomplete="nickname" />
       </label>
+      <AvatarPicker v-model="avatar" />
       <p v-if="formError" class="error">{{ formError }}</p>
 
       <div class="combo">
@@ -34,13 +35,21 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { isValidDisplayName, isValidRoomId, normalizeRoomId } from "@scrum-poker/shared";
+import {
+  isValidDisplayName,
+  isValidRoomId,
+  normalizeRoomId,
+  randomAvatarId,
+  type AvatarId,
+} from "@scrum-poker/shared";
 import { createRoom, roomExists } from "../api";
-import { getStoredName, setStoredName } from "../session";
+import AvatarPicker from "../components/AvatarPicker.vue";
+import { getStoredAvatar, getStoredName, setStoredAvatar, setStoredName } from "../session";
 
 const router = useRouter();
 const route = useRoute();
 const name = ref(getStoredName());
+const avatar = ref<AvatarId | null>(getStoredAvatar());
 const createId = ref("");
 const joinId = ref("");
 const formError = ref("");
@@ -58,6 +67,7 @@ function requireName(): boolean {
     return false;
   }
   setStoredName(name.value);
+  setStoredAvatar(avatar.value ?? randomAvatarId());
   formError.value = "";
   return true;
 }

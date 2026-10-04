@@ -1,3 +1,4 @@
+import type { AvatarId } from "./avatars.js";
 import { averageVotes, isCardValue, type CardValue } from "./cards.js";
 import { isValidDisplayName, namesEqual, normalizeDisplayName } from "./ids.js";
 
@@ -6,6 +7,7 @@ export type RoomPhase = "voting" | "revealed";
 export type RoomUser = {
   id: string;
   displayName: string;
+  avatar: AvatarId;
   vote: CardValue | null;
 };
 
@@ -19,6 +21,7 @@ export type Room = {
 export type PublicUser = {
   id: string;
   displayName: string;
+  avatar: AvatarId;
   hasVoted: boolean;
   vote: CardValue | null;
   isCreator: boolean;
@@ -125,6 +128,7 @@ export function toPublicRoomState(room: Room): RoomState {
     users: room.users.map((u) => ({
       id: u.id,
       displayName: u.displayName,
+      avatar: u.avatar,
       hasVoted: u.vote !== null,
       vote: revealed ? u.vote : null,
       isCreator: u.id === room.creatorId,

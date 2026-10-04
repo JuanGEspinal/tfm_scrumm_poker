@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AVATAR_IDS, isAvatarId, randomAvatarId } from "./avatars.js";
 import { averageVotes } from "./cards.js";
 import {
   addUser,
@@ -13,8 +14,8 @@ import {
   type RoomUser,
 } from "./room.js";
 
-const alice: RoomUser = { id: "a", displayName: "Alice", vote: null };
-const bob: RoomUser = { id: "b", displayName: "Bob", vote: null };
+const alice: RoomUser = { id: "a", displayName: "Alice", avatar: "bernard", vote: null };
+const bob: RoomUser = { id: "b", displayName: "Bob", avatar: "laverne", vote: null };
 
 describe("averageVotes", () => {
   it("ignores infinity and question and returns one decimal", () => {
@@ -45,7 +46,7 @@ describe("room machine", () => {
 
   it("rejoins by replacing the previous seat and clearing the vote", () => {
     let room = castVote(createRoom("sprint-1", alice), "a", "8");
-    room = rejoinUser(room, "a", { id: "a2", displayName: "Alice", vote: null });
+    room = rejoinUser(room, "a", { id: "a2", displayName: "Alice", avatar: "bernard", vote: null });
     expect(room.creatorId).toBe("a2");
     expect(room.users[0]?.id).toBe("a2");
     expect(room.users[0]?.vote).toBeNull();
@@ -93,5 +94,23 @@ describe("room machine", () => {
     let room = addUser(createRoom("sprint-1", alice), bob);
     room = removeUser(room, "b");
     expect(room.users).toHaveLength(1);
+  });
+
+  it("exposes each user's avatar in the public state", () => {
+    const room = addUser(createRoom("sprint-1", alice), bob);
+    expect(toPublicRoomState(room).users.map((u) => u.avatar)).toEqual(["bernard", "laverne"]);
+  });
+});
+
+describe("avatars", () => {
+  it("validates avatar ids", () => {
+    expect(isAvatarId("lechuck")).toBe(true);
+    expect(isAvatarId("nope")).toBe(false);
+    expect(isAvatarId(undefined)).toBe(false);
+  });
+
+  it("picks a random avatar within the list", () => {
+    expect(randomAvatarId(() => 0)).toBe(AVATAR_IDS[0]);
+    expect(randomAvatarId(() => 0.9999)).toBe(AVATAR_IDS[AVATAR_IDS.length - 1]);
   });
 });

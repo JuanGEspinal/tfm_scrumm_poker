@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { io as ioClient, type Socket } from "socket.io-client";
 import { Redis } from "ioredis";
-import { CLIENT_EVENTS, SERVER_EVENTS, type RoomState } from "@scrum-poker/shared";
+import { CLIENT_EVENTS, SERVER_EVENTS, isAvatarId, type RoomState } from "@scrum-poker/shared";
 import { buildApp } from "./app.js";
 
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
@@ -94,12 +94,14 @@ describe("socket flow", () => {
     await waitForConnect(b);
 
     const aReady = waitForState(a, (s) => s.users.some((u) => u.displayName === "Ana"), errors);
-    a.emit(CLIENT_EVENTS.join, { roomId, displayName: "Ana" });
+    a.emit(CLIENT_EVENTS.join, { roomId, displayName: "Ana", avatar: "lechuck" });
     await aReady;
 
     const both = waitForState(b, (s) => s.users.length === 2, errors);
     b.emit(CLIENT_EVENTS.join, { roomId, displayName: "Bruno" });
-    await both;
+    const joined = await both;
+    expect(joined.users.find((u) => u.displayName === "Ana")?.avatar).toBe("lechuck");
+    expect(isAvatarId(joined.users.find((u) => u.displayName === "Bruno")?.avatar)).toBe(true);
 
     const voted = waitForState(a, (s) => s.users.filter((u) => u.hasVoted).length === 2, errors);
     a.emit(CLIENT_EVENTS.vote, { value: "5" });

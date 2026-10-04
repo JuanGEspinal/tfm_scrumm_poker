@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import {
   CLIENT_EVENTS,
   SERVER_EVENTS,
+  type AvatarId,
   type CardValue,
   type RoomError,
   type RoomState,
@@ -39,9 +40,9 @@ export const useRoomStore = defineStore("room", () => {
     return socket;
   }
 
-  function join(roomId: string, displayName: string) {
+  function join(roomId: string, displayName: string, avatar: AvatarId) {
     selfName.value = displayName;
-    ensureSocket().emit(CLIENT_EVENTS.join, { roomId, displayName });
+    ensureSocket().emit(CLIENT_EVENTS.join, { roomId, displayName, avatar });
   }
 
   function vote(value: CardValue) {

@@ -1,3 +1,4 @@
+import type { AvatarId } from "./avatars.js";
 import type { RoomState } from "./room.js";
 import type { CardValue } from "./cards.js";
 
@@ -16,6 +17,7 @@ export const SERVER_EVENTS = {
 export type JoinPayload = {
   roomId: string;
   displayName: string;
+  avatar?: AvatarId;
 };
 
 export type VotePayload = {
