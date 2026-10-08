@@ -1,3 +1,5 @@
+import type { BoardTask, BoardTaskDetail } from "@scrum-poker/shared";
+
 const API_BASE = "/api";
 
 export type ApiError = {
@@ -24,6 +26,30 @@ export async function createRoom(id: string): Promise<{ id: string }> {
     throw await parseError(response);
   }
   return response.json() as Promise<{ id: string }>;
+}
+
+export async function fetchBoardTasks(): Promise<BoardTask[]> {
+  const response = await fetch(`${API_BASE}/board/issues`);
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  const body = (await response.json()) as { tasks?: BoardTask[] };
+  if (!Array.isArray(body.tasks)) {
+    throw { message: "No se han podido cargar las tareas del panel." } satisfies ApiError;
+  }
+  return body.tasks;
+}
+
+export async function fetchBoardTaskDetail(key: string): Promise<BoardTaskDetail> {
+  const response = await fetch(`${API_BASE}/board/issues/${encodeURIComponent(key)}`);
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  const body = (await response.json()) as Partial<BoardTaskDetail>;
+  if (typeof body.key !== "string" || typeof body.description !== "string" || !Array.isArray(body.comments)) {
+    throw { message: "No se ha podido cargar el detalle de la tarea." } satisfies ApiError;
+  }
+  return { key: body.key, description: body.description, comments: body.comments };
 }
 
 export async function roomExists(id: string): Promise<boolean> {

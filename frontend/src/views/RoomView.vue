@@ -1,10 +1,20 @@
 <template>
   <main class="page room-page">
     <header class="room-header">
-      <div>
+      <div class="room-identity">
         <p class="eyebrow">Sala</p>
         <h1>{{ roomId }}</h1>
       </div>
+      <button
+        type="button"
+        class="room-task"
+        :class="{ 'is-empty': !selectedTask }"
+        :title="selectedTask?.title ?? 'Seleccionar tarea'"
+        aria-haspopup="dialog"
+        @click="tasksOpen = true"
+      >
+        <span class="room-task-label">{{ selectedTask?.title ?? "Seleccionar tarea" }}</span>
+      </button>
       <router-link class="ghost" to="/">Salir</router-link>
     </header>
 
@@ -38,14 +48,22 @@
 
     <p v-else class="muted">Conectando con la sala…</p>
   </main>
+  <BoardDrawer
+    :open="tasksOpen"
+    :selected-key="selectedTask?.key"
+    @close="tasksOpen = false"
+    @select="selectedTask = $event"
+  />
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import type { BoardTask } from "@scrum-poker/shared";
+import AveragePanel from "../components/AveragePanel.vue";
+import BoardDrawer from "../components/BoardDrawer.vue";
 import CardDeck from "../components/CardDeck.vue";
 import UserBoard from "../components/UserBoard.vue";
-import AveragePanel from "../components/AveragePanel.vue";
 import { getOrAssignAvatar, getStoredName } from "../session";
 import { useRoomStore } from "../stores/room";
 
@@ -53,6 +71,8 @@ const route = useRoute();
 const router = useRouter();
 const store = useRoomStore();
 const roomId = String(route.params.roomId);
+const tasksOpen = ref(false);
+const selectedTask = ref<BoardTask | null>(null);
 
 onMounted(() => {
   const name = getStoredName();
