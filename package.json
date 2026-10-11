@@ -12,7 +12,8 @@
   "scripts": {
     "dev": "npm run build -w @scrum-poker/shared && concurrently -n shared,back,front -c cyan,green,magenta \"npm run dev -w @scrum-poker/shared\" \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "build": "npm run build -w @scrum-poker/shared && npm run build -w backend && npm run build -w frontend",
-    "test": "npm test -w @scrum-poker/shared && npm test -w backend && npm test -w frontend"
+    "test": "npm test -w @scrum-poker/shared && npm test -w backend && npm test -w frontend",
+    "prepare": "sh -c 'if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git config core.hooksPath .githooks; fi'"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

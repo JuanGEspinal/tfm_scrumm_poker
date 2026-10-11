@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "Ejecutando tests antes del push..."
+npm test
