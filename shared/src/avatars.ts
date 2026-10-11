@@ -1,5 +1,6 @@
 export const AVATAR_IDS = [
   "bernard",
+  "elaine",
   "fred",
   "green",
   "guy1",
@@ -12,6 +13,7 @@ export const AVATAR_IDS = [
   "many",
   "purple",
   "sam",
+  "sophia",
   "stan",
 ] as const;
 
