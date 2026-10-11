@@ -1,7 +1,7 @@
 <template>
   <main class="page room-page">
     <header class="room-header">
-      <img class="room-logo" :src="logoUrl" alt="Scumm Pocker" />
+      <img class="room-logo" :src="logoUrl" alt="Scumm poker" />
       <div class="room-identity">
         <p class="eyebrow">Sala</p>
         <h1>{{ roomId }}</h1>
@@ -77,7 +77,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import logoUrl from "../assets/scumm-pocker-logo.png";
+import logoUrl from "../assets/scumm-poker-logo.png";
 import AveragePanel from "../components/AveragePanel.vue";
 import BoardDrawer from "../components/BoardDrawer.vue";
 import CardDeck from "../components/CardDeck.vue";

@@ -2,7 +2,7 @@
   <main class="page home-page">
     <header class="home-brand">
       <h1>
-        <img class="home-logo" :src="logoUrl" alt="Scumm Pocker" />
+        <img class="home-logo" :src="logoUrl" alt="Scumm poker" />
       </h1>
     </header>
 
@@ -44,7 +44,7 @@ import {
   type AvatarId,
 } from "@scrum-poker/shared";
 import { createRoom, roomExists } from "../api";
-import logoUrl from "../assets/scumm-pocker-logo.png";
+import logoUrl from "../assets/scumm-poker-logo.png";
 import AvatarPicker from "../components/AvatarPicker.vue";
 import { getStoredAvatar, getStoredName, setStoredAvatar, setStoredName } from "../session";
 
