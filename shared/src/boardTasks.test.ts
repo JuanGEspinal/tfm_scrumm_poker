@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterBoardTasks, isBoardTaskKey, type BoardTask } from "./boardTasks.js";
+import { filterBoardTasks, isBoardTaskKey, parseBoardTask, type BoardTask } from "./boardTasks.js";
 
 const tasks: BoardTask[] = [
   { key: "SCRUM-1", title: "Elegir base de datos", done: false, estimated: false },
@@ -29,6 +29,19 @@ describe("filterBoardTasks", () => {
     expect(
       filterBoardTasks(tasks, { query: "", activeOnly: false, unestimatedOnly: true }).map((task) => task.key),
     ).toEqual(["SCRUM-1", "SCRUM-2"]);
+  });
+
+  it("parses a board task and drops anything else", () => {
+    const task = { key: "SCRUM-1", title: "  Elegir base de datos  ", done: false, estimated: true };
+    expect(parseBoardTask(task)).toEqual({
+      key: "SCRUM-1",
+      title: "Elegir base de datos",
+      done: false,
+      estimated: true,
+    });
+    expect(parseBoardTask(null)).toBeNull();
+    expect(parseBoardTask({ key: "scrum-1", title: "x", done: false, estimated: false })).toBeNull();
+    expect(parseBoardTask({ key: "SCRUM-1", title: "   ", done: false, estimated: false })).toBeNull();
   });
 
   it("accepts a Jira issue key", () => {

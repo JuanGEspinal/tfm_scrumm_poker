@@ -6,7 +6,16 @@ type Handler = (payload: unknown) => void;
 
 const fakeSocket = {
   handlers: new Map<string, Handler>(),
+  ioHandlers: new Map<string, Handler>(),
   emitted: [] as Array<[string, unknown]>,
+  io: {
+    on(event: string, handler: Handler) {
+      fakeSocket.ioHandlers.set(event, handler);
+    },
+    off(event: string) {
+      fakeSocket.ioHandlers.delete(event);
+    },
+  },
   on(event: string, handler: Handler) {
     this.handlers.set(event, handler);
   },
@@ -32,6 +41,7 @@ function roomState(phase: RoomState["phase"], anaVoted: boolean): RoomState {
     creatorId: "a",
     phase,
     average: null,
+    selectedTask: null,
     users: [
       { id: "a", displayName: "Ana", avatar: "bernard", hasVoted: anaVoted, vote: null, isCreator: true },
     ],
@@ -42,6 +52,7 @@ describe("room store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     fakeSocket.handlers.clear();
+    fakeSocket.ioHandlers.clear();
     fakeSocket.emitted = [];
   });
 
@@ -64,6 +75,47 @@ describe("room store", () => {
 
     expect(fakeSocket.emitted).toContainEqual([CLIENT_EVENTS.vote, { value: "5" }]);
     expect(store.selectedCard).toBe("5");
+  });
+
+  it("sends the selected task to the room", () => {
+    const store = useRoomStore();
+    store.join("sprint-1", "Ana", "bernard");
+    fakeSocket.receive(SERVER_EVENTS.state, roomState("voting", false));
+    const task = { key: "SCRUM-2", title: "Cerrar sprint", done: false, estimated: false };
+
+    store.selectTask(task);
+
+    expect(store.state?.selectedTask).toEqual(task);
+    expect(fakeSocket.emitted).toContainEqual([CLIENT_EVENTS.selectTask, { task }]);
+  });
+
+  it("keeps the task picked before the join state arrives and sends it again", () => {
+    const store = useRoomStore();
+    store.join("sprint-1", "Ana", "bernard");
+    const task = { key: "SCRUM-1", title: "Elegir base de datos", done: false, estimated: true };
+    store.selectTask(task);
+
+    fakeSocket.receive(SERVER_EVENTS.state, roomState("voting", false));
+
+    expect(store.state?.selectedTask).toEqual(task);
+    expect(fakeSocket.emitted.filter(([event]) => event === CLIENT_EVENTS.selectTask)).toEqual([
+      [CLIENT_EVENTS.selectTask, { task }],
+      [CLIENT_EVENTS.selectTask, { task }],
+    ]);
+  });
+
+  it("rejoins the room after the socket reconnects", () => {
+    const store = useRoomStore();
+    store.join("sprint-1", "Ana", "lechuck");
+    fakeSocket.emitted = [];
+
+    fakeSocket.ioHandlers.get("reconnect")?.(undefined);
+
+    expect(fakeSocket.emitted).toContainEqual([
+      CLIENT_EVENTS.join,
+      { roomId: "sprint-1", displayName: "Ana", avatar: "lechuck" },
+    ]);
+    store.disconnect();
   });
 
   it("clears the own card when another user starts a new round", () => {

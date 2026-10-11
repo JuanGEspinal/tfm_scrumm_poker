@@ -1,4 +1,5 @@
 import type { AvatarId } from "./avatars.js";
+import { parseBoardTask, type BoardTask } from "./boardTasks.js";
 import { averageVotes, isCardValue, type CardValue } from "./cards.js";
 import { isValidDisplayName, namesEqual, normalizeDisplayName } from "./ids.js";
 
@@ -16,6 +17,7 @@ export type Room = {
   creatorId: string;
   phase: RoomPhase;
   users: RoomUser[];
+  selectedTask: BoardTask | null;
 };
 
 export type PublicUser = {
@@ -33,6 +35,7 @@ export type RoomState = {
   phase: RoomPhase;
   users: PublicUser[];
   average: number | null;
+  selectedTask: BoardTask | null;
 };
 
 export function createEmptyRoom(id: string): Room {
@@ -41,6 +44,7 @@ export function createEmptyRoom(id: string): Room {
     creatorId: "",
     phase: "voting",
     users: [],
+    selectedTask: null,
   };
 }
 
@@ -103,6 +107,14 @@ export function castVote(room: Room, userId: string, value: CardValue): Room {
   };
 }
 
+export function selectTask(room: Room, task: unknown): Room {
+  const selectedTask = parseBoardTask(task);
+  if (!selectedTask) {
+    throw new Error("invalid_task");
+  }
+  return { ...room, selectedTask };
+}
+
 export function revealRound(room: Room): Room {
   if (room.phase !== "voting") {
     throw new Error("wrong_phase");
@@ -125,6 +137,7 @@ export function toPublicRoomState(room: Room): RoomState {
     creatorId: room.creatorId,
     phase: room.phase,
     average: revealed ? averageVotes(room.users.map((u) => u.vote)) : null,
+    selectedTask: parseBoardTask(room.selectedTask),
     users: room.users.map((u) => ({
       id: u.id,
       displayName: u.displayName,

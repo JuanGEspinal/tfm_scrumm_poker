@@ -4,6 +4,7 @@ import {
   CLIENT_EVENTS,
   SERVER_EVENTS,
   type AvatarId,
+  type BoardTask,
   type CardValue,
   type RoomError,
   type RoomState,
@@ -16,6 +17,15 @@ export const useRoomStore = defineStore("room", () => {
   const selectedCard = ref<CardValue | null>(null);
   const selfName = ref("");
   let socket: AppSocket | null = null;
+  let credentials: { roomId: string; displayName: string; avatar: AvatarId } | null = null;
+  let pendingTask: BoardTask | null = null;
+  let retriedTask = false;
+
+  function rejoin() {
+    if (credentials) {
+      socket?.emit(CLIENT_EVENTS.join, credentials);
+    }
+  }
 
   const revealed = computed(() => state.value?.phase === "revealed");
 
@@ -24,8 +34,20 @@ export const useRoomStore = defineStore("room", () => {
       return socket;
     }
     socket = connectSocket();
+    socket.io.on("reconnect", rejoin);
     socket.on(SERVER_EVENTS.state, (next) => {
-      state.value = next;
+      const task = pendingTask;
+      const keepLocalTask = task !== null && !next.selectedTask && !retriedTask;
+      if (task && next.selectedTask?.key === task.key) {
+        pendingTask = null;
+        retriedTask = false;
+      } else if (keepLocalTask) {
+        retriedTask = true;
+      } else if (task && next.selectedTask) {
+        pendingTask = null;
+        retriedTask = false;
+      }
+      state.value = keepLocalTask && task ? { ...next, selectedTask: task } : next;
       error.value = null;
       if (next.phase === "voting") {
         const me = next.users.find((u) => u.displayName.toLowerCase() === selfName.value.toLowerCase());
@@ -33,8 +55,14 @@ export const useRoomStore = defineStore("room", () => {
           selectedCard.value = null;
         }
       }
+      if (keepLocalTask && task) {
+        socket?.emit(CLIENT_EVENTS.selectTask, { task });
+      }
     });
     socket.on(SERVER_EVENTS.error, (payload: RoomError) => {
+      if (payload.code === "not_in_room" && pendingTask) {
+        return;
+      }
       error.value = payload.message;
     });
     return socket;
@@ -42,7 +70,8 @@ export const useRoomStore = defineStore("room", () => {
 
   function join(roomId: string, displayName: string, avatar: AvatarId) {
     selfName.value = displayName;
-    ensureSocket().emit(CLIENT_EVENTS.join, { roomId, displayName, avatar });
+    credentials = { roomId, displayName, avatar };
+    ensureSocket().emit(CLIENT_EVENTS.join, credentials);
   }
 
   function vote(value: CardValue) {
@@ -51,6 +80,15 @@ export const useRoomStore = defineStore("room", () => {
     }
     selectedCard.value = value;
     ensureSocket().emit(CLIENT_EVENTS.vote, { value });
+  }
+
+  function selectTask(task: BoardTask) {
+    pendingTask = task;
+    retriedTask = false;
+    if (state.value) {
+      state.value = { ...state.value, selectedTask: task };
+    }
+    ensureSocket().emit(CLIENT_EVENTS.selectTask, { task });
   }
 
   function reveal() {
@@ -63,6 +101,10 @@ export const useRoomStore = defineStore("room", () => {
   }
 
   function disconnect() {
+    credentials = null;
+    pendingTask = null;
+    retriedTask = false;
+    socket?.io.off("reconnect", rejoin);
     socket?.removeAllListeners();
     socket?.disconnect();
     socket = null;
@@ -78,6 +120,7 @@ export const useRoomStore = defineStore("room", () => {
     revealed,
     join,
     vote,
+    selectTask,
     reveal,
     resetRound,
     disconnect,

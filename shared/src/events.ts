@@ -1,4 +1,5 @@
 import type { AvatarId } from "./avatars.js";
+import type { BoardTask } from "./boardTasks.js";
 import type { RoomState } from "./room.js";
 import type { CardValue } from "./cards.js";
 
@@ -7,6 +8,7 @@ export const CLIENT_EVENTS = {
   vote: "vote:cast",
   reveal: "round:reveal",
   reset: "round:reset",
+  selectTask: "task:select",
 } as const;
 
 export const SERVER_EVENTS = {
@@ -24,6 +26,10 @@ export type VotePayload = {
   value: CardValue;
 };
 
+export type SelectTaskPayload = {
+  task: BoardTask;
+};
+
 export type RoomErrorCode =
   | "invalid_room_id"
   | "invalid_name"
@@ -32,6 +38,7 @@ export type RoomErrorCode =
   | "name_taken"
   | "not_in_room"
   | "invalid_vote"
+  | "invalid_task"
   | "wrong_phase";
 
 export type RoomError = {
@@ -44,6 +51,7 @@ export type ClientToServerEvents = {
   [CLIENT_EVENTS.vote]: (payload: VotePayload) => void;
   [CLIENT_EVENTS.reveal]: () => void;
   [CLIENT_EVENTS.reset]: () => void;
+  [CLIENT_EVENTS.selectTask]: (payload: SelectTaskPayload) => void;
 };
 
 export type ServerToClientEvents = {

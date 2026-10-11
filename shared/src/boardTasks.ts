@@ -28,8 +28,36 @@ export type BoardTaskDetail = {
 
 const BOARD_TASK_KEY = /^[A-Z][A-Z0-9]+-\d+$/;
 
+const MAX_TASK_TITLE = 255;
+
 export function isBoardTaskKey(value: string): boolean {
   return BOARD_TASK_KEY.test(value);
+}
+
+export function parseBoardTask(value: unknown): BoardTask | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.key !== "string" || !isBoardTaskKey(candidate.key)) {
+    return null;
+  }
+  if (typeof candidate.title !== "string") {
+    return null;
+  }
+  const title = candidate.title.trim();
+  if (title.length === 0 || title.length > MAX_TASK_TITLE) {
+    return null;
+  }
+  if (typeof candidate.done !== "boolean" || typeof candidate.estimated !== "boolean") {
+    return null;
+  }
+  return {
+    key: candidate.key,
+    title,
+    done: candidate.done,
+    estimated: candidate.estimated,
+  };
 }
 
 export type BoardTaskFilter = {

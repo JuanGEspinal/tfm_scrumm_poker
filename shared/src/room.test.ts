@@ -10,6 +10,7 @@ import {
   removeUser,
   resetRound,
   revealRound,
+  selectTask,
   toPublicRoomState,
   type RoomUser,
 } from "./room.js";
@@ -111,6 +112,24 @@ describe("room machine", () => {
     let room = addUser(createRoom("sprint-1", alice), bob);
     room = removeUser(room, "b");
     expect(room.users).toHaveLength(1);
+  });
+
+  it("shares the selected task with every client", () => {
+    const task = { key: "SCRUM-1", title: "Elegir base de datos", done: false, estimated: false };
+    const room = selectTask(createRoom("sprint-1", alice), task);
+    expect(room.selectedTask).toEqual(task);
+    expect(toPublicRoomState(room).selectedTask).toEqual(task);
+  });
+
+  it("rejects a task that is not a board issue", () => {
+    expect(() => selectTask(createRoom("sprint-1", alice), { key: "nope", title: "x" })).toThrow("invalid_task");
+  });
+
+  it("keeps the selected task when the round resets", () => {
+    const task = { key: "SCRUM-2", title: "Cerrar sprint", done: true, estimated: false };
+    let room = selectTask(createRoom("sprint-1", alice), task);
+    room = resetRound(revealRound(room));
+    expect(room.selectedTask).toEqual(task);
   });
 
   it("exposes each user's avatar in the public state", () => {

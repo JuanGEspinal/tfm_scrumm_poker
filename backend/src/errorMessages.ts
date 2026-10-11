@@ -8,5 +8,6 @@ export const ERROR_MESSAGES: Record<RoomErrorCode, string> = {
   name_taken: "Ese nombre ya está en uso en la sala.",
   not_in_room: "No estás en esta sala.",
   invalid_vote: "La carta no es válida.",
+  invalid_task: "La tarea seleccionada no es válida.",
   wrong_phase: "Esta acción no está permitida en este momento.",
 };

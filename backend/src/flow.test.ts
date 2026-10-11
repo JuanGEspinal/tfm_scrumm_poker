@@ -93,9 +93,13 @@ describe("socket flow", () => {
     await waitForConnect(a);
     await waitForConnect(b);
 
-    const aReady = waitForState(a, (s) => s.users.some((u) => u.displayName === "Ana"), errors);
+    const task = { key: "SCRUM-2", title: "Cerrar sprint", done: false, estimated: false };
+    const aReady = waitForState(a, (s) => s.selectedTask?.key === task.key, errors);
     a.emit(CLIENT_EVENTS.join, { roomId, displayName: "Ana", avatar: "lechuck" });
-    await aReady;
+    a.emit(CLIENT_EVENTS.selectTask, { task });
+    const selectedAlone = await aReady;
+    expect(selectedAlone.users.map((u) => u.displayName)).toEqual(["Ana"]);
+    expect(selectedAlone.selectedTask).toEqual(task);
 
     const both = waitForState(b, (s) => s.users.length === 2, errors);
     b.emit(CLIENT_EVENTS.join, { roomId, displayName: "Bruno" });

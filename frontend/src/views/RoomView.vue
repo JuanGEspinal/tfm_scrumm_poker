@@ -70,14 +70,13 @@
     :open="tasksOpen"
     :selected-key="selectedTask?.key"
     @close="tasksOpen = false"
-    @select="selectedTask = $event"
+    @select="store.selectTask"
   />
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import type { BoardTask } from "@scrum-poker/shared";
 import logoUrl from "../assets/scumm-pocker-logo.png";
 import AveragePanel from "../components/AveragePanel.vue";
 import BoardDrawer from "../components/BoardDrawer.vue";
@@ -91,7 +90,7 @@ const router = useRouter();
 const store = useRoomStore();
 const roomId = String(route.params.roomId);
 const tasksOpen = ref(false);
-const selectedTask = ref<BoardTask | null>(null);
+const selectedTask = computed(() => store.state?.selectedTask ?? null);
 
 onMounted(() => {
   const name = getStoredName();
