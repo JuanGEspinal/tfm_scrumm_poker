@@ -28,6 +28,10 @@ const detail: BoardTaskDetail = {
       body: "Mirad Redis.",
     },
   ],
+  attachments: [
+    { id: "20001", filename: "esquema.png", size: 1536, mimeType: "image/png" },
+    { id: "20002", filename: "notas.pdf", size: 2048, mimeType: "application/pdf" },
+  ],
 };
 
 async function openDrawer(selectedKey?: string) {
@@ -109,6 +113,15 @@ describe("BoardDrawer", () => {
     expect(panel.text()).toContain("Elegir Postgres.");
     expect(panel.text()).toContain("Ada");
     expect(panel.text()).toContain("Mirad Redis.");
+    expect(panel.text()).toContain("esquema.png");
+    expect(panel.text()).toContain("1,5 KB");
+    const links = panel.findAll(".board-attachment");
+    expect(links[0]?.attributes("href")).toBe("/api/board/issues/SCRUM-1/attachments/20001");
+    expect(links[0]?.attributes("target")).toBe("_blank");
+    expect(links[0]?.get("img").attributes("src")).toBe("/api/board/issues/SCRUM-1/attachments/20001/thumbnail");
+    expect(links[1]?.attributes("href")).toBe("/api/board/issues/SCRUM-1/attachments/20002");
+    expect(links[1]?.get(".board-attachment-fallback").text()).toBe("PDF");
+    expect(links[1]?.find("img").exists()).toBe(false);
     expect(wrapper.emitted("select")).toBeUndefined();
     expect(wrapper.emitted("close")).toBeUndefined();
     expect(wrapper.get(".board-task-row.inspecting .board-task-title").text()).toBe("Elegir base de datos");

@@ -1,4 +1,11 @@
-import { isBoardTaskKey, type BoardTask, type BoardTaskComment, type BoardTaskDetail } from "@scrum-poker/shared";
+import {
+  isBoardTaskKey,
+  isFibonacciEstimate,
+  type BoardTask,
+  type BoardTaskAttachment,
+  type BoardTaskComment,
+  type BoardTaskDetail,
+} from "@scrum-poker/shared";
 
 export type JiraConfig = {
   baseUrl: string;
@@ -10,7 +17,14 @@ export type JiraConfig = {
 
 export class JiraBoardError extends Error {
   constructor(
-    readonly code: "jira_unauthorized" | "jira_unavailable" | "jira_not_found" | "invalid_issue_key",
+    readonly code:
+      | "jira_unauthorized"
+      | "jira_unavailable"
+      | "jira_not_found"
+      | "invalid_issue_key"
+      | "invalid_attachment_id"
+      | "attachment_not_found"
+      | "invalid_estimate",
   ) {
     super(code);
   }
@@ -143,6 +157,34 @@ export async function loadBoardTasks(
 
 const COMMENT_PAGE_SIZE = 100;
 const MAX_COMMENT_PAGES = 5;
+
+type JiraAttachment = {
+  id?: string;
+  filename?: string;
+  size?: number;
+  mimeType?: string;
+};
+
+function mapAttachments(files: JiraAttachment[] | undefined): BoardTaskAttachment[] {
+  return (files ?? []).flatMap((file) => {
+    const mapped = toAttachment(file);
+    return mapped ? [mapped] : [];
+  });
+}
+
+function toAttachment(file: JiraAttachment): BoardTaskAttachment | null {
+  const id = file.id?.trim() ?? "";
+  const filename = file.filename?.trim() ?? "";
+  if (!id || !filename) {
+    return null;
+  }
+  return {
+    id,
+    filename,
+    size: typeof file.size === "number" && Number.isFinite(file.size) && file.size >= 0 ? file.size : 0,
+    mimeType: file.mimeType?.trim() || "application/octet-stream",
+  };
+}
 
 type JiraComment = {
   id?: string;
@@ -320,9 +362,9 @@ export async function loadBoardTaskDetail(
   }
 
   const issueUrl = new URL(`${config.baseUrl}/rest/api/3/issue/${encodeURIComponent(issueKey)}`);
-  issueUrl.searchParams.set("fields", "description");
+  issueUrl.searchParams.set("fields", "description,attachment");
   const issuePromise = jiraGet(config, issueUrl, fetchImpl).then((response) =>
-    readJiraJson<{ fields?: { description?: unknown } }>(response),
+    readJiraJson<{ fields?: { description?: unknown; attachment?: JiraAttachment[] } }>(response),
   );
   const [issue, comments] = await Promise.all([issuePromise, loadIssueComments(config, issueKey, fetchImpl)]);
 
@@ -330,5 +372,154 @@ export async function loadBoardTaskDetail(
     key: issueKey,
     description: adfToPlainText(issue.fields?.description),
     comments,
+    attachments: mapAttachments(issue.fields?.attachment),
   };
+}
+
+const ATTACHMENT_ID = /^\d{1,18}$/;
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+const MAX_ATTACHMENT_REDIRECTS = 3;
+
+export type BoardTaskFile = {
+  filename: string;
+  mimeType: string;
+  bytes: Buffer;
+};
+
+export async function loadBoardTaskAttachment(
+  config: JiraConfig,
+  key: string,
+  attachmentId: string,
+  variant: "content" | "thumbnail",
+  fetchImpl: typeof fetch = fetch,
+): Promise<BoardTaskFile> {
+  const issueKey = key.trim().toUpperCase();
+  if (!isBoardTaskKey(issueKey)) {
+    throw new JiraBoardError("invalid_issue_key");
+  }
+  if (!ATTACHMENT_ID.test(attachmentId)) {
+    throw new JiraBoardError("invalid_attachment_id");
+  }
+
+  const issueUrl = new URL(`${config.baseUrl}/rest/api/3/issue/${encodeURIComponent(issueKey)}`);
+  issueUrl.searchParams.set("fields", "attachment");
+  const issue = await readJiraJson<{ fields?: { attachment?: JiraAttachment[] } }>(
+    await jiraGet(config, issueUrl, fetchImpl),
+  );
+  const file = mapAttachments(issue.fields?.attachment).find((item) => item.id === attachmentId);
+  if (!file) {
+    throw new JiraBoardError("attachment_not_found");
+  }
+
+  const path = variant === "thumbnail" ? "thumbnail" : "content";
+  const fileUrl = new URL(`${config.baseUrl}/rest/api/3/attachment/${path}/${attachmentId}`);
+  const downloaded = await downloadJiraFile(config, fileUrl, fetchImpl);
+  return {
+    filename: file.filename,
+    mimeType: downloaded.mimeType,
+    bytes: downloaded.bytes,
+  };
+}
+
+async function downloadJiraFile(
+  config: JiraConfig,
+  start: URL,
+  fetchImpl: typeof fetch,
+): Promise<{ mimeType: string; bytes: Buffer }> {
+  const jiraHost = new URL(config.baseUrl).host;
+  let current = start;
+  let sendAuth = true;
+
+  for (let hop = 0; hop <= MAX_ATTACHMENT_REDIRECTS; hop += 1) {
+    let response: Response;
+    try {
+      response = await fetchImpl(current, {
+        headers: sendAuth
+          ? { Accept: "*/*", Authorization: authorizationHeader(config) }
+          : { Accept: "*/*" },
+        redirect: "manual",
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch {
+      throw new JiraBoardError("jira_unavailable");
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) {
+        throw new JiraBoardError("jira_unavailable");
+      }
+      const next = new URL(location, current);
+      if (next.protocol !== "https:" && next.protocol !== "http:") {
+        throw new JiraBoardError("jira_unavailable");
+      }
+      sendAuth = next.host === jiraHost;
+      current = next;
+      continue;
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      throw new JiraBoardError("jira_unauthorized");
+    }
+    if (response.status === 404) {
+      throw new JiraBoardError("attachment_not_found");
+    }
+    if (!response.ok) {
+      throw new JiraBoardError("jira_unavailable");
+    }
+
+    const declared = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_ATTACHMENT_BYTES) {
+      throw new JiraBoardError("jira_unavailable");
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > MAX_ATTACHMENT_BYTES) {
+      throw new JiraBoardError("jira_unavailable");
+    }
+    const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() || "application/octet-stream";
+    return { mimeType, bytes };
+  }
+
+  throw new JiraBoardError("jira_unavailable");
+}
+
+export async function assignStoryPoints(
+  config: JiraConfig,
+  key: string,
+  points: number,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  const issueKey = key.trim().toUpperCase();
+  if (!isBoardTaskKey(issueKey)) {
+    throw new JiraBoardError("invalid_issue_key");
+  }
+  if (!isFibonacciEstimate(points)) {
+    throw new JiraBoardError("invalid_estimate");
+  }
+
+  const url = new URL(`${config.baseUrl}/rest/api/3/issue/${encodeURIComponent(issueKey)}`);
+  let response: Response;
+  try {
+    response = await fetchImpl(url, {
+      method: "PUT",
+      headers: {
+        ...jiraHeaders(authorizationHeader(config)),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ fields: { [config.storyPointsField]: points } }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new JiraBoardError("jira_unavailable");
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw new JiraBoardError("jira_unauthorized");
+  }
+  if (response.status === 404) {
+    throw new JiraBoardError("jira_not_found");
+  }
+  if (!response.ok) {
+    throw new JiraBoardError("jira_unavailable");
+  }
 }

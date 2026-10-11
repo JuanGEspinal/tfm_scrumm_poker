@@ -12,10 +12,18 @@ export type BoardTaskComment = {
   body: string;
 };
 
+export type BoardTaskAttachment = {
+  id: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+};
+
 export type BoardTaskDetail = {
   key: string;
   description: string;
   comments: BoardTaskComment[];
+  attachments: BoardTaskAttachment[];
 };
 
 const BOARD_TASK_KEY = /^[A-Z][A-Z0-9]+-\d+$/;

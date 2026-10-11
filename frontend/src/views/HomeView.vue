@@ -1,7 +1,9 @@
 <template>
   <main class="page home-page">
-    <header>
-      <h1>Scrum poker</h1>      
+    <header class="home-brand">
+      <h1>
+        <img class="home-logo" :src="logoUrl" alt="Scumm Pocker" />
+      </h1>
     </header>
 
     <form class="panel" @submit.prevent>
@@ -42,6 +44,7 @@ import {
   type AvatarId,
 } from "@scrum-poker/shared";
 import { createRoom, roomExists } from "../api";
+import logoUrl from "../assets/scumm-pocker-logo.png";
 import AvatarPicker from "../components/AvatarPicker.vue";
 import { getStoredAvatar, getStoredName, setStoredAvatar, setStoredName } from "../session";
 

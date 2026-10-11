@@ -1,4 +1,4 @@
-import type { BoardTask, BoardTaskDetail } from "@scrum-poker/shared";
+import type { BoardTask, BoardTaskAttachment, BoardTaskDetail } from "@scrum-poker/shared";
 
 const API_BASE = "/api";
 
@@ -46,10 +46,49 @@ export async function fetchBoardTaskDetail(key: string): Promise<BoardTaskDetail
     throw await parseError(response);
   }
   const body = (await response.json()) as Partial<BoardTaskDetail>;
-  if (typeof body.key !== "string" || typeof body.description !== "string" || !Array.isArray(body.comments)) {
+  if (
+    typeof body.key !== "string" ||
+    typeof body.description !== "string" ||
+    !Array.isArray(body.comments) ||
+    !Array.isArray(body.attachments)
+  ) {
     throw { message: "No se ha podido cargar el detalle de la tarea." } satisfies ApiError;
   }
-  return { key: body.key, description: body.description, comments: body.comments };
+  return {
+    key: body.key,
+    description: body.description,
+    comments: body.comments,
+    attachments: body.attachments.filter(isAttachment),
+  };
+}
+
+function isAttachment(value: unknown): value is BoardTaskAttachment {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const file = value as Partial<BoardTaskAttachment>;
+  return (
+    typeof file.id === "string" &&
+    typeof file.filename === "string" &&
+    typeof file.size === "number" &&
+    typeof file.mimeType === "string"
+  );
+}
+
+export function boardTaskAttachmentUrl(key: string, attachmentId: string, thumbnail = false): string {
+  const path = `${API_BASE}/board/issues/${encodeURIComponent(key)}/attachments/${encodeURIComponent(attachmentId)}`;
+  return thumbnail ? `${path}/thumbnail` : path;
+}
+
+export async function assignStoryPoints(key: string, points: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/board/issues/${encodeURIComponent(key)}/estimate`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ points }),
+  });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
 }
 
 export async function roomExists(id: string): Promise<boolean> {

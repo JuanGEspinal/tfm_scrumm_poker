@@ -108,7 +108,7 @@ describe("socket flow", () => {
     b.emit(CLIENT_EVENTS.vote, { value: "8" });
     await voted;
 
-    const revealed = waitForState(a, (s) => s.phase === "revealed" && s.average === 6.5, errors);
+    const revealed = waitForState(a, (s) => s.phase === "revealed" && s.average === 5, errors);
     a.emit(CLIENT_EVENTS.reveal);
     const revealState = await revealed;
     expect(revealState.users.map((u) => u.vote).sort()).toEqual(["5", "8"]);

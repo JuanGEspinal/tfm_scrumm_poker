@@ -1,6 +1,7 @@
 <template>
   <main class="page room-page">
     <header class="room-header">
+      <img class="room-logo" :src="logoUrl" alt="Scumm Pocker" />
       <div class="room-identity">
         <p class="eyebrow">Sala</p>
         <h1>{{ roomId }}</h1>
@@ -34,15 +35,32 @@
         @select="store.vote"
       />
 
+      <div class="round-actions">
+        <button
+          type="button"
+          :class="{ secondary: store.revealed }"
+          :disabled="store.revealed"
+          @click="store.reveal"
+        >
+          Revelar
+        </button>
+        <button
+          type="button"
+          :class="{ secondary: !store.revealed }"
+          @click="store.resetRound"
+        >
+          Nueva ronda
+        </button>
+      </div>
+
       <div class="room-results">
         <UserBoard :users="store.state.users" :revealed="store.revealed" />
 
-        <div class="actions">
-          <button type="button" :disabled="store.revealed" @click="store.reveal">Revelar</button>
-          <button type="button" class="secondary" @click="store.resetRound">Nueva ronda</button>
-        </div>
-
-        <AveragePanel :visible="store.revealed" :value="store.state.average" />
+        <AveragePanel
+          :visible="store.revealed"
+          :value="store.state.average"
+          :issue-key="selectedTask?.key ?? null"
+        />
       </div>
     </template>
 
@@ -60,6 +78,7 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { BoardTask } from "@scrum-poker/shared";
+import logoUrl from "../assets/scumm-pocker-logo.png";
 import AveragePanel from "../components/AveragePanel.vue";
 import BoardDrawer from "../components/BoardDrawer.vue";
 import CardDeck from "../components/CardDeck.vue";

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   adfToPlainText,
+  assignStoryPoints,
+  loadBoardTaskAttachment,
   loadBoardTaskDetail,
   loadBoardTasks,
   readJiraConfig,
@@ -156,6 +158,11 @@ describe("loadBoardTaskDetail", () => {
                 },
               ],
             },
+            attachment: [
+              { id: "20001", filename: "esquema.png", size: 1536, mimeType: "image/png" },
+              { id: " ", filename: "vacio.txt", size: 10, mimeType: "text/plain" },
+              { filename: "sin-id.txt", size: 10, mimeType: "text/plain" },
+            ],
           },
         }),
         { status: 200 },
@@ -173,13 +180,110 @@ describe("loadBoardTaskDetail", () => {
           body: "Mirad Redis.",
         },
       ],
+      attachments: [{ id: "20001", filename: "esquema.png", size: 1536, mimeType: "image/png" }],
     });
+    const issueCall = fetchImpl.mock.calls.find((call) => !String(call[0]).includes("/comment"));
+    expect(String(issueCall?.[0])).toContain("fields=description%2Cattachment");
   });
 
   it("rejects a key that is not a Jira issue", async () => {
     const fetchImpl = vi.fn();
     await expect(loadBoardTaskDetail(config, "../admin", fetchImpl as typeof fetch)).rejects.toMatchObject({
       code: "invalid_issue_key",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("loadBoardTaskAttachment", () => {
+  function issueWithPng(): Response {
+    return new Response(
+      JSON.stringify({
+        fields: {
+          attachment: [{ id: "20001", filename: "esquema.png", size: 4, mimeType: "image/png" }],
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  it("follows the media redirect without sending the Jira credentials", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/rest/api/3/issue/")) {
+        return issueWithPng();
+      }
+      if (url.includes("/attachment/content/")) {
+        return new Response(null, {
+          status: 303,
+          headers: { location: "https://media.example/file.png" },
+        });
+      }
+      return new Response(png, { status: 200, headers: { "Content-Type": "image/png" } });
+    });
+
+    const file = await loadBoardTaskAttachment(config, "scrum-1", "20001", "content", fetchImpl as typeof fetch);
+
+    expect(file).toMatchObject({ filename: "esquema.png", mimeType: "image/png" });
+    expect(file.bytes.equals(png)).toBe(true);
+    const mediaCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes("media.example"));
+    const headers = new Headers((mediaCall?.[1] as RequestInit | undefined)?.headers);
+    expect(headers.get("authorization")).toBeNull();
+  });
+
+  it("requests the thumbnail resource for a preview", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/rest/api/3/issue/")) {
+        return issueWithPng();
+      }
+      return new Response(Buffer.from([1, 2, 3]), { status: 200, headers: { "Content-Type": "image/jpeg" } });
+    });
+
+    const file = await loadBoardTaskAttachment(config, "SCRUM-1", "20001", "thumbnail", fetchImpl as typeof fetch);
+
+    expect(file.mimeType).toBe("image/jpeg");
+    const thumbCall = fetchImpl.mock.calls.find((call) => String(call[0]).includes("/attachment/thumbnail/"));
+    expect(String(thumbCall?.[0])).toBe(
+      "https://scrumpocker.atlassian.net/rest/api/3/attachment/thumbnail/20001",
+    );
+  });
+
+  it("does not download an attachment that is not on the issue", async () => {
+    const fetchImpl = vi.fn(async () => issueWithPng());
+    await expect(
+      loadBoardTaskAttachment(config, "SCRUM-1", "999", "content", fetchImpl as typeof fetch),
+    ).rejects.toMatchObject({ code: "attachment_not_found" });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an attachment id that is not numeric", async () => {
+    const fetchImpl = vi.fn();
+    await expect(
+      loadBoardTaskAttachment(config, "SCRUM-1", "../20001", "content", fetchImpl as typeof fetch),
+    ).rejects.toMatchObject({ code: "invalid_attachment_id" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("assignStoryPoints", () => {
+  it("writes the Fibonacci estimate to the story points field", async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
+
+    await assignStoryPoints(config, "scrum-2", 8, fetchImpl as typeof fetch);
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [url, init] = fetchImpl.mock.calls[0] as [URL, RequestInit];
+    expect(String(url)).toBe("https://scrumpocker.atlassian.net/rest/api/3/issue/SCRUM-2");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toEqual({ fields: { customfield_10016: 8 } });
+  });
+
+  it("rejects an estimate outside the Fibonacci scale", async () => {
+    const fetchImpl = vi.fn();
+    await expect(assignStoryPoints(config, "SCRUM-2", 7, fetchImpl as typeof fetch)).rejects.toMatchObject({
+      code: "invalid_estimate",
     });
     expect(fetchImpl).not.toHaveBeenCalled();
   });

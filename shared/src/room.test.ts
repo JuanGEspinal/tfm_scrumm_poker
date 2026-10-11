@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AVATAR_IDS, isAvatarId, randomAvatarId } from "./avatars.js";
-import { averageVotes } from "./cards.js";
+import { averageVotes, roundToFibonacci } from "./cards.js";
 import {
   addUser,
   castVote,
@@ -17,9 +17,26 @@ import {
 const alice: RoomUser = { id: "a", displayName: "Alice", avatar: "bernard", vote: null };
 const bob: RoomUser = { id: "b", displayName: "Bob", avatar: "laverne", vote: null };
 
+describe("roundToFibonacci", () => {
+  it("rounds to the nearest estimate and breaks ties downward", () => {
+    expect(roundToFibonacci(5.5)).toBe(5);
+    expect(roundToFibonacci(7)).toBe(8);
+    expect(roundToFibonacci(6.5)).toBe(5);
+    expect(roundToFibonacci(4)).toBe(3);
+    expect(roundToFibonacci(1.5)).toBe(1);
+    expect(roundToFibonacci(0.5)).toBe(0);
+    expect(roundToFibonacci(10.5)).toBe(8);
+    expect(roundToFibonacci(17)).toBe(13);
+    expect(roundToFibonacci(8)).toBe(8);
+    expect(roundToFibonacci(40)).toBe(21);
+  });
+});
+
 describe("averageVotes", () => {
-  it("ignores infinity and question and returns one decimal", () => {
-    expect(averageVotes(["1", "2", "∞", "?"])).toBe(1.5);
+  it("ignores infinity and question and rounds to Fibonacci", () => {
+    expect(averageVotes(["1", "2", "∞", "?"])).toBe(1);
+    expect(averageVotes(["3", "8"])).toBe(5);
+    expect(averageVotes(["5", "8", "8"])).toBe(8);
   });
 
   it("returns null when there are no numeric votes", () => {
@@ -64,7 +81,7 @@ describe("room machine", () => {
     room = revealRound(room);
     const shown = toPublicRoomState(room);
     expect(shown.users.map((u) => u.vote)).toEqual(["5", "8"]);
-    expect(shown.average).toBe(6.5);
+    expect(shown.average).toBe(5);
   });
 
   it("allows reveal with missing votes", () => {

@@ -16,8 +16,9 @@ Source of truth: `shared/` (`events.ts`, `cards.ts`, `room.ts`). Backend and fro
 ## Cards and average
 
 - Values: `1, 2, 3, 5, 8, 13, 21, ∞, ?`.
-- Average: arithmetic mean of numeric votes only. `∞` and `?` excluded. No numeric votes → `null` (UI shows `—`).
-- Average is computed only in `revealed`; in `voting` it is `null`.
+- Estimate scale (rounded average and Jira story points): `0, 1, 2, 3, 5, 8, 13, 21`.
+- Average: arithmetic mean of numeric votes only, then rounded to the nearest estimate. A tie rounds down (5.5 → 5, 7 → 8). `∞` and `?` excluded. No numeric votes → `null` (UI shows `—`).
+- Average is computed only in `revealed`; in `voting` it is `null`. The revealed field stays editable on the client, limited to the estimate scale.
 
 ## IDs and names
 

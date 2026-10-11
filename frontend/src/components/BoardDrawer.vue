@@ -75,7 +75,7 @@
       </section>
 
       <section id="board-task-detail" class="board-detail" aria-live="polite">
-        <p v-if="!inspected" class="muted">Pulsa el nombre de una tarea para ver su descripción y sus comentarios.</p>
+        <p v-if="!inspected" class="muted">Pulsa el nombre de una tarea para ver su descripción, sus comentarios y sus adjuntos.</p>
         <template v-else>
           <h3>{{ inspected.title }}</h3>
           <p v-if="detailLoading" class="muted">Cargando detalle…</p>
@@ -83,6 +83,29 @@
           <template v-else-if="detail">
             <h4>Descripción</h4>
             <p class="board-detail-text">{{ detail.description || "Sin descripción." }}</p>
+            <h4>Adjuntos</h4>
+            <p v-if="detail.attachments.length === 0" class="muted">Sin adjuntos.</p>
+            <ul v-else class="board-attachments">
+              <li v-for="file in detail.attachments" :key="file.id">
+                <a
+                  class="board-attachment"
+                  :href="boardTaskAttachmentUrl(detail.key, file.id)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <img
+                    v-if="isImage(file) && !hiddenThumbs.includes(file.id)"
+                    class="board-attachment-thumb"
+                    :src="boardTaskAttachmentUrl(detail.key, file.id, true)"
+                    alt=""
+                    @error="hideThumb(file.id)"
+                  />
+                  <span v-else class="board-attachment-fallback" aria-hidden="true">{{ fileExtension(file.filename) }}</span>
+                  <span class="board-attachment-name" :title="file.filename">{{ file.filename }}</span>
+                  <span class="muted">{{ formatSize(file.size) }}</span>
+                </a>
+              </li>
+            </ul>
             <h4>Comentarios</h4>
             <p v-if="detail.comments.length === 0" class="muted">Sin comentarios.</p>
             <ul v-else class="board-comments">
@@ -103,8 +126,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
-import { filterBoardTasks, type BoardTask, type BoardTaskDetail } from "@scrum-poker/shared";
-import { fetchBoardTaskDetail, fetchBoardTasks } from "../api";
+import { filterBoardTasks, type BoardTask, type BoardTaskAttachment, type BoardTaskDetail } from "@scrum-poker/shared";
+import { boardTaskAttachmentUrl, fetchBoardTaskDetail, fetchBoardTasks } from "../api";
 
 const props = defineProps<{
   open: boolean;
@@ -126,6 +149,7 @@ const inspected = ref<BoardTask | null>(null);
 const detail = ref<BoardTaskDetail | null>(null);
 const detailLoading = ref(false);
 const detailError = ref("");
+const hiddenThumbs = ref<string[]>([]);
 
 let requestId = 0;
 let detailRequestId = 0;
@@ -189,6 +213,7 @@ watch(
       detail.value = null;
       detailError.value = "";
       detailLoading.value = false;
+      hiddenThumbs.value = [];
       return;
     }
     window.addEventListener("keydown", onKeydown);
@@ -199,6 +224,41 @@ watch(
   },
   { immediate: true },
 );
+
+function isImage(file: BoardTaskAttachment): boolean {
+  return file.mimeType.startsWith("image/");
+}
+
+function fileExtension(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  const extension = dot >= 0 ? filename.slice(dot + 1) : "";
+  const clean = extension.replace(/[^a-zA-Z0-9]/g, "").slice(0, 4).toUpperCase();
+  return clean || "FILE";
+}
+
+function hideThumb(id: string) {
+  if (!hiddenThumbs.value.includes(id)) {
+    hiddenThumbs.value = [...hiddenThumbs.value, id];
+  }
+}
+
+function formatSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return "";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 || value >= 10 ? 0 : 1;
+  const formatted = new Intl.NumberFormat("es", { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(
+    value,
+  );
+  return `${formatted} ${units[unit]}`;
+}
 
 function formatWhen(value: string): string {
   const date = new Date(value);
@@ -213,6 +273,7 @@ async function showDetail(task: BoardTask) {
   inspected.value = task;
   detail.value = null;
   detailError.value = "";
+  hiddenThumbs.value = [];
   detailLoading.value = true;
   try {
     const next = await fetchBoardTaskDetail(task.key);

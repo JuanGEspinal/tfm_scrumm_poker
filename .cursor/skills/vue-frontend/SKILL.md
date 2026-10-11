@@ -16,5 +16,5 @@ description: Vue 3 frontend conventions for the Scrum poker app (Composition API
 ## Room UI
 
 - Voted box: distinct border. Hidden value until `revealed`. Flip animation on reveal.
-- Average section only when `revealed`.
+- Average section only when `revealed`. Show the Fibonacci-rounded mean in a field limited to `0, 1, 2, 3, 5, 8, 13, 21`. "Asignar estimación" writes that value to the selected Jira issue.
 - Anyone can click Revelar / Nueva ronda. Show “Anfitrión” on `isCreator`.

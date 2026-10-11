@@ -4,6 +4,27 @@ export type CardValue = (typeof CARD_VALUES)[number];
 
 const NUMERIC_CARDS = new Set(["1", "2", "3", "5", "8", "13", "21"]);
 
+export const FIBONACCI_ESTIMATES = [0, 1, 2, 3, 5, 8, 13, 21] as const;
+
+export type FibonacciEstimate = (typeof FIBONACCI_ESTIMATES)[number];
+
+export function isFibonacciEstimate(value: number): value is FibonacciEstimate {
+  return (FIBONACCI_ESTIMATES as readonly number[]).includes(value);
+}
+
+export function roundToFibonacci(value: number): FibonacciEstimate {
+  let best: FibonacciEstimate = FIBONACCI_ESTIMATES[0];
+  let bestDistance = Infinity;
+  for (const candidate of FIBONACCI_ESTIMATES) {
+    const distance = Math.abs(value - candidate);
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
 export function isCardValue(value: unknown): value is CardValue {
   return typeof value === "string" && (CARD_VALUES as readonly string[]).includes(value);
 }
@@ -26,5 +47,5 @@ export function averageVotes(votes: Array<CardValue | null>): number | null {
   }
 
   const sum = numbers.reduce((acc, n) => acc + n, 0);
-  return Math.round((sum / numbers.length) * 10) / 10;
+  return roundToFibonacci(sum / numbers.length);
 }
