@@ -89,14 +89,14 @@
               <li v-for="file in detail.attachments" :key="file.id">
                 <a
                   class="board-attachment"
-                  :href="boardTaskAttachmentUrl(detail.key, file.id)"
+                  :href="boardTaskAttachmentUrl(roomId, detail.key, file.id)"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <img
                     v-if="isImage(file) && !hiddenThumbs.includes(file.id)"
                     class="board-attachment-thumb"
-                    :src="boardTaskAttachmentUrl(detail.key, file.id, true)"
+                    :src="boardTaskAttachmentUrl(roomId, detail.key, file.id, true)"
                     alt=""
                     @error="hideThumb(file.id)"
                   />
@@ -130,6 +130,7 @@ import { filterBoardTasks, type BoardTask, type BoardTaskAttachment, type BoardT
 import { boardTaskAttachmentUrl, fetchBoardTaskDetail, fetchBoardTasks } from "../api";
 
 const props = defineProps<{
+  roomId: string;
   open: boolean;
   selectedKey?: string;
 }>();
@@ -174,7 +175,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const next = await fetchBoardTasks();
+    const next = await fetchBoardTasks(props.roomId);
     if (id !== requestId) {
       return;
     }
@@ -276,7 +277,7 @@ async function showDetail(task: BoardTask) {
   hiddenThumbs.value = [];
   detailLoading.value = true;
   try {
-    const next = await fetchBoardTaskDetail(task.key);
+    const next = await fetchBoardTaskDetail(props.roomId, task.key);
     if (id !== detailRequestId) {
       return;
     }

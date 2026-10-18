@@ -4,6 +4,7 @@ import {
   CLIENT_EVENTS,
   SERVER_EVENTS,
   addUser,
+  normalizeChatText,
   castVote,
   findUserByName,
   isAvatarId,
@@ -19,6 +20,7 @@ import {
   selectTask,
   toPublicRoomState,
   type ClientToServerEvents,
+  type ChatSendPayload,
   type JoinPayload,
   type RoomErrorCode,
   type SelectTaskPayload,
@@ -120,6 +122,7 @@ export function createSocketServer(
           socket.data.userId = userId;
           await socket.join(roomId);
           io.to(roomId).emit(SERVER_EVENTS.state, toPublicRoomState(next));
+          socket.emit(SERVER_EVENTS.chatHistory, { messages: await store.listChat(roomId) });
         } catch (error) {
           const code = (error instanceof Error ? error.message : "room_not_found") as RoomErrorCode;
           emitError(socket, ERROR_MESSAGES[code] ? code : "room_not_found");
@@ -175,6 +178,37 @@ export function createSocketServer(
           const code = (error instanceof Error ? error.message : "invalid_task") as RoomErrorCode;
           emitError(socket, ERROR_MESSAGES[code] ? code : "invalid_task");
         }
+      });
+    });
+
+    socket.on(CLIENT_EVENTS.sendChat, (payload: ChatSendPayload) => {
+      enqueue(socket.id, async () => {
+        const { roomId, userId } = socket.data;
+        if (!roomId || !userId) {
+          emitError(socket, "not_in_room");
+          return;
+        }
+        const text = normalizeChatText(payload?.text);
+        if (!text) {
+          emitError(socket, "invalid_message");
+          return;
+        }
+        const room = await store.get(roomId);
+        const user = room?.users.find((entry) => entry.id === userId);
+        if (!user) {
+          emitError(socket, "not_in_room");
+          return;
+        }
+        const message = {
+          id: randomUUID(),
+          userId,
+          displayName: user.displayName,
+          avatar: user.avatar,
+          text,
+          createdAt: new Date().toISOString(),
+        };
+        await store.appendChat(roomId, message);
+        io.to(roomId).emit(SERVER_EVENTS.chatMessage, { message });
       });
     });
 

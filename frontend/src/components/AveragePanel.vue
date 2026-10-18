@@ -12,8 +12,8 @@
     </label>
     <p v-if="error" class="error average-feedback">{{ error }}</p>
     <p v-else-if="status" class="muted average-feedback">{{ status }}</p>
-    <p v-else-if="!issueKey" class="muted average-feedback">Selecciona una tarea para asignar la estimación.</p>
-    <button type="button" class="average-assign" :disabled="!canAssign" @click="assign">
+    <p v-else-if="jiraLinked && !issueKey" class="muted average-feedback">Selecciona una tarea para asignar la estimación.</p>
+    <button v-if="jiraLinked" type="button" class="average-assign" :disabled="!canAssign" @click="assign">
       {{ assigning ? "Asignando…" : "Asignar estimación" }}
     </button>
   </section>
@@ -28,6 +28,8 @@ const props = defineProps<{
   visible: boolean;
   value: number | null;
   issueKey: string | null;
+  roomId: string;
+  jiraLinked: boolean;
 }>();
 
 const estimate = ref("");
@@ -41,7 +43,9 @@ const selectedPoints = computed(() => {
   return estimate.value !== "" && isFibonacciEstimate(points) ? points : null;
 });
 
-const canAssign = computed(() => selectedPoints.value !== null && props.issueKey !== null && !assigning.value);
+const canAssign = computed(
+  () => props.jiraLinked && selectedPoints.value !== null && props.issueKey !== null && !assigning.value,
+);
 
 watch(
   () => props.value,
@@ -66,14 +70,14 @@ function errorMessage(cause: unknown): string {
 
 async function assign() {
   const points = selectedPoints.value;
-  if (points === null || !props.issueKey || assigning.value) {
+  if (points === null || !props.issueKey || !canAssign.value) {
     return;
   }
   assigning.value = true;
   error.value = "";
   status.value = "";
   try {
-    await assignStoryPoints(props.issueKey, points);
+    await assignStoryPoints(props.roomId, props.issueKey, points);
     status.value = "Estimación asignada.";
   } catch (cause) {
     error.value = errorMessage(cause);

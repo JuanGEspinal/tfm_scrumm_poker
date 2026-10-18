@@ -26,6 +26,18 @@ Source of truth: `shared/` (`events.ts`, `cards.ts`, `room.ts`). Backend and fro
 - Display names unique per room, case-insensitive.
 - Empty rooms stay in Redis with TTL 2h so a reload can rejoin.
 
+## Jira link
+
+- A room is created either plain or linked to a Jira board (`Room.jiraLinked`, exposed in `RoomState`). Rooms stored without the field count as plain.
+- `shared/src/jira.ts`: `JiraLinkInput` and `parseJiraBoardUrl` (Jira Cloud board URLs only).
+
+## Chat
+
+- Room-level, not cleared on `round:reset`. Stored outside `Room` / `room:state` so a message does not rebroadcast votes.
+- `chat:send` `{ text }` → validate with `normalizeChatText` (trim, 1–2000). Snapshot `displayName` and `avatar` at send time.
+- `chat:history` to the joining socket only. `chat:message` to the Socket.IO room.
+- Light markdown parsed by `parseChatText`: `**bold**`, `*italic*` / `_italic_`, `[label](http(s)://...)`, and bare `http(s)` URLs. Other URLs stay plain text.
+
 ## Join during revealed
 
 New users see the current revealed votes. They do not vote until `round:reset`.

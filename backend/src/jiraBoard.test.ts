@@ -5,9 +5,10 @@ import {
   loadBoardTaskAttachment,
   loadBoardTaskDetail,
   loadBoardTasks,
-  readJiraConfig,
   readStoryPoints,
   toBoardTask,
+  toJiraConfig,
+  verifyJiraBoard,
   type JiraConfig,
 } from "./jiraBoard.js";
 
@@ -19,24 +20,54 @@ const config: JiraConfig = {
   storyPointsField: "customfield_10016",
 };
 
-describe("readJiraConfig", () => {
-  it("requires email and api token", () => {
-    expect(readJiraConfig({})).toBeNull();
-    expect(readJiraConfig({ JIRA_EMAIL: "ada@example.com" })).toBeNull();
-  });
+describe("toJiraConfig", () => {
+  const link = {
+    boardUrl: "https://scrumpocker.atlassian.net/jira/software/projects/SCRUM/boards/1",
+    email: " ada@example.com ",
+    apiToken: " secret ",
+  };
 
-  it("defaults the scrum poker board and story point field", () => {
-    expect(
-      readJiraConfig({
-        JIRA_EMAIL: "ada@example.com",
-        JIRA_API_TOKEN: "secret",
-      }),
-    ).toEqual({
+  it("builds the config from the board URL and defaults the story point field", () => {
+    expect(toJiraConfig(link)).toEqual({
       baseUrl: "https://scrumpocker.atlassian.net",
       email: "ada@example.com",
       apiToken: "secret",
       boardId: 1,
       storyPointsField: "customfield_10016",
+    });
+    expect(toJiraConfig({ ...link, storyPointsField: "customfield_10028" })?.storyPointsField).toBe(
+      "customfield_10028",
+    );
+  });
+
+  it("rejects incomplete or unsafe input", () => {
+    expect(toJiraConfig(null)).toBeNull();
+    expect(toJiraConfig({ ...link, apiToken: " " })).toBeNull();
+    expect(toJiraConfig({ ...link, email: "ada" })).toBeNull();
+    expect(toJiraConfig({ ...link, boardUrl: "https://intranet.local/boards/1" })).toBeNull();
+    expect(toJiraConfig({ ...link, storyPointsField: "summary" })).toBeNull();
+  });
+});
+
+describe("verifyJiraBoard", () => {
+  it("reads the board with the given credentials", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ id: 1 }), { status: 200 }));
+    await verifyJiraBoard(config, fetchImpl as typeof fetch);
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(String(url)).toBe("https://scrumpocker.atlassian.net/rest/agile/1.0/board/1");
+    expect(new Headers(init.headers).get("authorization")).toBe(
+      `Basic ${Buffer.from("ada@example.com:token").toString("base64")}`,
+    );
+  });
+
+  it("maps rejected credentials and missing boards", async () => {
+    const unauthorized = vi.fn(async () => new Response("no", { status: 401 }));
+    await expect(verifyJiraBoard(config, unauthorized as typeof fetch)).rejects.toMatchObject({
+      code: "jira_unauthorized",
+    });
+    const missing = vi.fn(async () => new Response("no", { status: 404 }));
+    await expect(verifyJiraBoard(config, missing as typeof fetch)).rejects.toMatchObject({
+      code: "jira_not_found",
     });
   });
 });

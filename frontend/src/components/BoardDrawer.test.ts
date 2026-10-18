@@ -43,8 +43,9 @@ async function openDrawer(selectedKey?: string) {
     return jsonResponse({ tasks });
   });
   vi.stubGlobal("fetch", fetchImpl);
-  const wrapper = mount(BoardDrawer, { props: { open: true, selectedKey } });
+  const wrapper = mount(BoardDrawer, { props: { roomId: "sprint-1", open: true, selectedKey } });
   await flushPromises();
+  expect(String(fetchImpl.mock.calls[0]?.[0])).toBe("/api/rooms/sprint-1/board/issues");
   return wrapper;
 }
 
@@ -95,12 +96,12 @@ describe("BoardDrawer", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        jsonResponse({ code: "jira_not_configured", message: "Jira no está configurado en el servidor." }, 503),
+        jsonResponse({ code: "jira_unauthorized", message: "Jira ha rechazado las credenciales de la sala." }, 401),
       ),
     );
-    const wrapper = mount(BoardDrawer, { props: { open: true } });
+    const wrapper = mount(BoardDrawer, { props: { roomId: "sprint-1", open: true } });
     await flushPromises();
-    expect(wrapper.get(".error").text()).toContain("Jira no está configurado en el servidor.");
+    expect(wrapper.get(".error").text()).toContain("Jira ha rechazado las credenciales de la sala.");
   });
 
   it("shows the description and comments under the list when the title is chosen", async () => {
@@ -116,10 +117,12 @@ describe("BoardDrawer", () => {
     expect(panel.text()).toContain("esquema.png");
     expect(panel.text()).toContain("1,5 KB");
     const links = panel.findAll(".board-attachment");
-    expect(links[0]?.attributes("href")).toBe("/api/board/issues/SCRUM-1/attachments/20001");
+    expect(links[0]?.attributes("href")).toBe("/api/rooms/sprint-1/board/issues/SCRUM-1/attachments/20001");
     expect(links[0]?.attributes("target")).toBe("_blank");
-    expect(links[0]?.get("img").attributes("src")).toBe("/api/board/issues/SCRUM-1/attachments/20001/thumbnail");
-    expect(links[1]?.attributes("href")).toBe("/api/board/issues/SCRUM-1/attachments/20002");
+    expect(links[0]?.get("img").attributes("src")).toBe(
+      "/api/rooms/sprint-1/board/issues/SCRUM-1/attachments/20001/thumbnail",
+    );
+    expect(links[1]?.attributes("href")).toBe("/api/rooms/sprint-1/board/issues/SCRUM-1/attachments/20002");
     expect(links[1]?.get(".board-attachment-fallback").text()).toBe("PDF");
     expect(links[1]?.find("img").exists()).toBe(false);
     expect(wrapper.emitted("select")).toBeUndefined();

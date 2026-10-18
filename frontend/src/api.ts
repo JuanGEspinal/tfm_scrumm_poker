@@ -1,4 +1,4 @@
-import type { BoardTask, BoardTaskAttachment, BoardTaskDetail } from "@scrum-poker/shared";
+import type { BoardTask, BoardTaskAttachment, BoardTaskDetail, JiraLinkInput } from "@scrum-poker/shared";
 
 const API_BASE = "/api";
 
@@ -16,11 +16,15 @@ async function parseError(response: Response): Promise<ApiError> {
   }
 }
 
-export async function createRoom(id: string): Promise<{ id: string }> {
+function boardUrl(roomId: string): string {
+  return `${API_BASE}/rooms/${encodeURIComponent(roomId)}/board/issues`;
+}
+
+export async function createRoom(id: string, jira?: JiraLinkInput): Promise<{ id: string }> {
   const response = await fetch(`${API_BASE}/rooms`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id }),
+    body: JSON.stringify(jira ? { id, jira } : { id }),
   });
   if (!response.ok) {
     throw await parseError(response);
@@ -28,8 +32,8 @@ export async function createRoom(id: string): Promise<{ id: string }> {
   return response.json() as Promise<{ id: string }>;
 }
 
-export async function fetchBoardTasks(): Promise<BoardTask[]> {
-  const response = await fetch(`${API_BASE}/board/issues`);
+export async function fetchBoardTasks(roomId: string): Promise<BoardTask[]> {
+  const response = await fetch(boardUrl(roomId));
   if (!response.ok) {
     throw await parseError(response);
   }
@@ -40,8 +44,8 @@ export async function fetchBoardTasks(): Promise<BoardTask[]> {
   return body.tasks;
 }
 
-export async function fetchBoardTaskDetail(key: string): Promise<BoardTaskDetail> {
-  const response = await fetch(`${API_BASE}/board/issues/${encodeURIComponent(key)}`);
+export async function fetchBoardTaskDetail(roomId: string, key: string): Promise<BoardTaskDetail> {
+  const response = await fetch(`${boardUrl(roomId)}/${encodeURIComponent(key)}`);
   if (!response.ok) {
     throw await parseError(response);
   }
@@ -75,13 +79,13 @@ function isAttachment(value: unknown): value is BoardTaskAttachment {
   );
 }
 
-export function boardTaskAttachmentUrl(key: string, attachmentId: string, thumbnail = false): string {
-  const path = `${API_BASE}/board/issues/${encodeURIComponent(key)}/attachments/${encodeURIComponent(attachmentId)}`;
+export function boardTaskAttachmentUrl(roomId: string, key: string, attachmentId: string, thumbnail = false): string {
+  const path = `${boardUrl(roomId)}/${encodeURIComponent(key)}/attachments/${encodeURIComponent(attachmentId)}`;
   return thumbnail ? `${path}/thumbnail` : path;
 }
 
-export async function assignStoryPoints(key: string, points: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/board/issues/${encodeURIComponent(key)}/estimate`, {
+export async function assignStoryPoints(roomId: string, key: string, points: number): Promise<void> {
+  const response = await fetch(`${boardUrl(roomId)}/${encodeURIComponent(key)}/estimate`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ points }),

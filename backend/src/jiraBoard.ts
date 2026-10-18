@@ -1,6 +1,11 @@
 import {
+  DEFAULT_STORY_POINTS_FIELD,
   isBoardTaskKey,
   isFibonacciEstimate,
+  isJiraEmail,
+  isStoryPointsField,
+  parseJiraBoardUrl,
+  type JiraLinkInput,
   type BoardTask,
   type BoardTaskAttachment,
   type BoardTaskComment,
@@ -43,19 +48,40 @@ type JiraPage = {
   issues?: JiraIssue[];
 };
 
-export function readJiraConfig(env: NodeJS.ProcessEnv = process.env): JiraConfig | null {
-  const email = env.JIRA_EMAIL?.trim() ?? "";
-  const apiToken = env.JIRA_API_TOKEN?.trim() ?? "";
-  if (!email || !apiToken) {
+const MAX_API_TOKEN = 1024;
+
+export function toJiraConfig(input: unknown): JiraConfig | null {
+  if (typeof input !== "object" || input === null) {
     return null;
   }
-  const boardId = Number(env.JIRA_BOARD_ID?.trim() || "1");
-  if (!Number.isInteger(boardId) || boardId < 1) {
+  const candidate = input as Partial<Record<keyof JiraLinkInput, unknown>>;
+  if (
+    typeof candidate.boardUrl !== "string" ||
+    typeof candidate.email !== "string" ||
+    typeof candidate.apiToken !== "string" ||
+    (candidate.storyPointsField !== undefined && typeof candidate.storyPointsField !== "string")
+  ) {
     return null;
   }
-  const baseUrl = (env.JIRA_BASE_URL?.trim() || "https://scrumpocker.atlassian.net").replace(/\/$/, "");
-  const storyPointsField = env.JIRA_STORY_POINTS_FIELD?.trim() || "customfield_10016";
-  return { baseUrl, email, apiToken, boardId, storyPointsField };
+  const board = parseJiraBoardUrl(candidate.boardUrl);
+  const email = candidate.email.trim();
+  const apiToken = candidate.apiToken.trim();
+  const storyPointsField = candidate.storyPointsField?.trim() || DEFAULT_STORY_POINTS_FIELD;
+  if (
+    !board ||
+    !isJiraEmail(email) ||
+    !apiToken ||
+    apiToken.length > MAX_API_TOKEN ||
+    !isStoryPointsField(storyPointsField)
+  ) {
+    return null;
+  }
+  return { ...board, email, apiToken, storyPointsField };
+}
+
+export async function verifyJiraBoard(config: JiraConfig, fetchImpl: typeof fetch = fetch): Promise<void> {
+  const url = new URL(`${config.baseUrl}/rest/agile/1.0/board/${config.boardId}`);
+  await readJiraJson<unknown>(await jiraGet(config, url, fetchImpl));
 }
 
 export function readStoryPoints(value: unknown): number | null {

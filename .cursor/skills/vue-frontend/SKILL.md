@@ -16,5 +16,8 @@ description: Vue 3 frontend conventions for the Scrum poker app (Composition API
 ## Room UI
 
 - Voted box: distinct border. Hidden value until `revealed`. Flip animation on reveal.
+- Home offers "Crear sala" (plain room) and "Crear sala vinculada a Jira", which opens `JiraLinkModal` (board URL, Atlassian email, API token, optional story points field).
 - Average section only when `revealed`. Show the Fibonacci-rounded mean in a field limited to `0, 1, 2, 3, 5, 8, 13, 21`. "Asignar estimación" writes that value to the selected Jira issue.
+- Only when `state.jiraLinked`: "Seleccionar tarea", the board drawer and "Asignar estimación". Plain rooms show just the average.
 - Anyone can click Revelar / Nueva ronda. Show “Anfitrión” on `isCreator`.
+- Chat only on the room screen. Closed by default. Fixed “Chat” button, bottom-right; below 1024px it is 25% wide. Opening the panel (button, and close with X or Escape) shows history. Desktop (≥1024px) gives the panel 25% width and the room 75%, same 280ms transition. Below 1024px the panel covers the screen. Unread count is for other people’s messages received while the panel is closed; opening clears it. History on join does not increment it.

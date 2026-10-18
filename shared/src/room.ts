@@ -18,6 +18,7 @@ export type Room = {
   phase: RoomPhase;
   users: RoomUser[];
   selectedTask: BoardTask | null;
+  jiraLinked: boolean;
 };
 
 export type PublicUser = {
@@ -36,15 +37,17 @@ export type RoomState = {
   users: PublicUser[];
   average: number | null;
   selectedTask: BoardTask | null;
+  jiraLinked: boolean;
 };
 
-export function createEmptyRoom(id: string): Room {
+export function createEmptyRoom(id: string, jiraLinked = false): Room {
   return {
     id,
     creatorId: "",
     phase: "voting",
     users: [],
     selectedTask: null,
+    jiraLinked,
   };
 }
 
@@ -138,6 +141,7 @@ export function toPublicRoomState(room: Room): RoomState {
     phase: room.phase,
     average: revealed ? averageVotes(room.users.map((u) => u.vote)) : null,
     selectedTask: parseBoardTask(room.selectedTask),
+    jiraLinked: room.jiraLinked === true,
     users: room.users.map((u) => ({
       id: u.id,
       displayName: u.displayName,

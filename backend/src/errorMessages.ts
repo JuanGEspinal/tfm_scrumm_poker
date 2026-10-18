@@ -9,5 +9,6 @@ export const ERROR_MESSAGES: Record<RoomErrorCode, string> = {
   not_in_room: "No estás en esta sala.",
   invalid_vote: "La carta no es válida.",
   invalid_task: "La tarea seleccionada no es válida.",
+  invalid_message: "El mensaje no es válido.",
   wrong_phase: "Esta acción no está permitida en este momento.",
 };

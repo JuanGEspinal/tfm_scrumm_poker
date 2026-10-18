@@ -19,7 +19,10 @@
           Crear sala
           <input v-model="createId" type="text" placeholder="id-de-sala" />
         </label>
-        <button type="button" @click="onCreate">Crear sala</button>
+        <div class="combo-actions">
+          <button type="button" @click="onCreate">Crear sala</button>
+          <button type="button" class="secondary" @click="onOpenJira">Crear sala vinculada a Jira</button>
+        </div>
       </div>
 
       <div class="combo">
@@ -31,6 +34,13 @@
       </div>
     </form>
   </main>
+  <JiraLinkModal
+    :open="jiraOpen"
+    :submitting="jiraSubmitting"
+    :error="jiraError"
+    @close="jiraOpen = false"
+    @submit="onCreateWithJira"
+  />
 </template>
 
 <script setup lang="ts">
@@ -42,10 +52,12 @@ import {
   normalizeRoomId,
   randomAvatarId,
   type AvatarId,
+  type JiraLinkInput,
 } from "@scrum-poker/shared";
 import { createRoom, roomExists } from "../api";
 import logoUrl from "../assets/scumm-poker-logo.png";
 import AvatarPicker from "../components/AvatarPicker.vue";
+import JiraLinkModal from "../components/JiraLinkModal.vue";
 import { getStoredAvatar, getStoredName, setStoredAvatar, setStoredName } from "../session";
 
 const router = useRouter();
@@ -55,6 +67,9 @@ const avatar = ref<AvatarId | null>(getStoredAvatar());
 const createId = ref("");
 const joinId = ref("");
 const formError = ref("");
+const jiraOpen = ref(false);
+const jiraSubmitting = ref(false);
+const jiraError = ref("");
 
 onMounted(() => {
   const pending = route.query.room;
@@ -74,20 +89,59 @@ function requireName(): boolean {
   return true;
 }
 
-async function onCreate() {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : (error as { message: string }).message;
+}
+
+function requireCreateId(): string | null {
   if (!requireName()) {
-    return;
+    return null;
   }
   const id = normalizeRoomId(createId.value);
   if (!isValidRoomId(id)) {
     formError.value = "El ID de sala debe tener 3-32 caracteres (letras, números o guiones).";
+    return null;
+  }
+  return id;
+}
+
+async function onCreate() {
+  const id = requireCreateId();
+  if (!id) {
     return;
   }
   try {
     const room = await createRoom(id);
     await router.push({ name: "room", params: { roomId: room.id } });
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : (error as { message: string }).message;
+    formError.value = errorMessage(error);
+  }
+}
+
+function onOpenJira() {
+  if (!requireCreateId()) {
+    return;
+  }
+  jiraError.value = "";
+  jiraOpen.value = true;
+}
+
+async function onCreateWithJira(jira: JiraLinkInput) {
+  const id = requireCreateId();
+  if (!id) {
+    jiraOpen.value = false;
+    return;
+  }
+  jiraSubmitting.value = true;
+  jiraError.value = "";
+  try {
+    const room = await createRoom(id, jira);
+    jiraOpen.value = false;
+    await router.push({ name: "room", params: { roomId: room.id } });
+  } catch (error) {
+    jiraError.value = errorMessage(error);
+  } finally {
+    jiraSubmitting.value = false;
   }
 }
 
@@ -108,7 +162,7 @@ async function onJoin() {
     }
     await router.push({ name: "room", params: { roomId: id } });
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : (error as { message: string }).message;
+    formError.value = errorMessage(error);
   }
 }
 </script>

@@ -42,6 +42,7 @@ function roomState(phase: RoomState["phase"], anaVoted: boolean): RoomState {
     phase,
     average: null,
     selectedTask: null,
+    jiraLinked: true,
     users: [
       { id: "a", displayName: "Ana", avatar: "bernard", hasVoted: anaVoted, vote: null, isCreator: true },
     ],
@@ -128,5 +129,55 @@ describe("room store", () => {
     fakeSocket.receive(SERVER_EVENTS.state, roomState("voting", false));
 
     expect(store.selectedCard).toBeNull();
+  });
+
+  it("stores chat history without counting it, and counts later messages while the panel is closed", () => {
+    const store = useRoomStore();
+    store.join("sprint-1", "Ana", "bernard");
+    fakeSocket.receive(SERVER_EVENTS.chatHistory, {
+      messages: [
+        {
+          id: "1",
+          userId: "b",
+          displayName: "Bruno",
+          avatar: "stan",
+          text: "antes",
+          createdAt: "2026-10-18T17:00:00.000Z",
+        },
+      ],
+    });
+    expect(store.messages).toHaveLength(1);
+    expect(store.unread).toBe(0);
+
+    fakeSocket.receive(SERVER_EVENTS.chatMessage, {
+      message: {
+        id: "2",
+        userId: "b",
+        displayName: "Bruno",
+        avatar: "stan",
+        text: "ahora",
+        createdAt: "2026-10-18T17:01:00.000Z",
+      },
+    });
+    expect(store.unread).toBe(1);
+
+    store.setChatPanelOpen(true);
+    expect(store.unread).toBe(0);
+    fakeSocket.receive(SERVER_EVENTS.chatMessage, {
+      message: {
+        id: "3",
+        userId: "a",
+        displayName: "Ana",
+        avatar: "bernard",
+        text: "mio",
+        createdAt: "2026-10-18T17:02:00.000Z",
+      },
+    });
+    expect(store.unread).toBe(0);
+
+    store.sendChat("   ");
+    store.sendChat("  listo  ");
+    expect(fakeSocket.emitted).toContainEqual([CLIENT_EVENTS.sendChat, { text: "listo" }]);
+    expect(fakeSocket.emitted.filter(([event]) => event === CLIENT_EVENTS.sendChat)).toHaveLength(1);
   });
 });

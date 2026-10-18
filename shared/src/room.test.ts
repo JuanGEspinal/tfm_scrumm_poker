@@ -12,6 +12,7 @@ import {
   revealRound,
   selectTask,
   toPublicRoomState,
+  type Room,
   type RoomUser,
 } from "./room.js";
 
@@ -130,6 +131,14 @@ describe("room machine", () => {
     let room = selectTask(createRoom("sprint-1", alice), task);
     room = resetRound(revealRound(room));
     expect(room.selectedTask).toEqual(task);
+  });
+
+  it("exposes whether the room is linked to Jira", () => {
+    expect(toPublicRoomState(createEmptyRoom("sprint-1")).jiraLinked).toBe(false);
+    expect(toPublicRoomState(createEmptyRoom("sprint-1", true)).jiraLinked).toBe(true);
+    const legacy = { ...createEmptyRoom("sprint-1") } as Partial<Room>;
+    delete legacy.jiraLinked;
+    expect(toPublicRoomState(legacy as Room).jiraLinked).toBe(false);
   });
 
   it("exposes each user's avatar in the public state", () => {

@@ -7,14 +7,17 @@ import {
   loadBoardTaskAttachment,
   loadBoardTaskDetail,
   loadBoardTasks,
+  toJiraConfig,
+  verifyJiraBoard,
   type JiraConfig,
 } from "./jiraBoard.js";
 import type { RoomStore } from "./roomStore.js";
 
 const JIRA_MESSAGES = {
-  jira_not_configured:
-    "Jira no está configurado en el servidor. Indica JIRA_EMAIL y JIRA_API_TOKEN en backend/.env.",
-  jira_unauthorized: "Jira ha rechazado las credenciales del servidor.",
+  jira_not_linked: "Esta sala no está vinculada a Jira.",
+  invalid_jira_config:
+    "Revisa los datos de Jira: la URL debe ser un panel de https://<sitio>.atlassian.net y el email y el API token son obligatorios.",
+  jira_unauthorized: "Jira ha rechazado las credenciales de la sala.",
   jira_unavailable: "No se han podido cargar las tareas del panel.",
   jira_not_found: "No se ha encontrado esa tarea en Jira.",
   invalid_issue_key: "La clave de la tarea no es válida.",
@@ -23,9 +26,17 @@ const JIRA_MESSAGES = {
   invalid_estimate: "La estimación debe ser 0, 1, 2, 3, 5, 8, 13 o 21.",
 } as const;
 
-function jiraStatus(code: keyof typeof JIRA_MESSAGES): number {
-  if (code === "jira_not_configured") {
-    return 503;
+const LINK_MESSAGES = {
+  jira_unauthorized: "Jira ha rechazado el email o el API token.",
+  jira_not_found: "No se ha encontrado ese panel en Jira o no tienes acceso a él.",
+  jira_unavailable: "No se ha podido conectar con Jira.",
+} as const;
+
+type JiraErrorCode = keyof typeof JIRA_MESSAGES;
+
+function jiraStatus(code: JiraErrorCode): number {
+  if (code === "jira_not_linked") {
+    return 409;
   }
   if (code === "jira_unauthorized") {
     return 401;
@@ -33,94 +44,122 @@ function jiraStatus(code: keyof typeof JIRA_MESSAGES): number {
   if (code === "jira_not_found" || code === "attachment_not_found") {
     return 404;
   }
-  if (code === "invalid_issue_key" || code === "invalid_attachment_id" || code === "invalid_estimate") {
+  if (
+    code === "invalid_issue_key" ||
+    code === "invalid_attachment_id" ||
+    code === "invalid_estimate" ||
+    code === "invalid_jira_config"
+  ) {
     return 400;
   }
   return 502;
 }
 
-export function registerHttp(app: FastifyInstance, store: RoomStore, jira: JiraConfig | null = null): void {
+function sendRoomError(reply: FastifyReply, code: keyof typeof ERROR_MESSAGES) {
+  const status = code === "room_exists" ? 409 : code === "room_not_found" ? 404 : 400;
+  return reply.code(status).send({ code, message: ERROR_MESSAGES[code] });
+}
+
+export function registerHttp(app: FastifyInstance, store: RoomStore, fetchImpl: typeof fetch = fetch): void {
   app.get("/health", async () => ({ ok: true }));
 
-  app.post<{ Body: { id?: string } }>("/rooms", async (request, reply) => {
+  app.post<{ Body: { id?: string; jira?: unknown } }>("/rooms", async (request, reply) => {
+    const id = normalizeRoomId(request.body?.id ?? "");
+    if (!isValidRoomId(id)) {
+      return sendRoomError(reply, "invalid_room_id");
+    }
+
+    let jira: JiraConfig | undefined;
+    if (request.body?.jira !== undefined) {
+      const config = toJiraConfig(request.body.jira);
+      if (!config) {
+        return reply.code(400).send({ code: "invalid_jira_config", message: JIRA_MESSAGES.invalid_jira_config });
+      }
+      if (await store.exists(id)) {
+        return sendRoomError(reply, "room_exists");
+      }
+      try {
+        await verifyJiraBoard(config, fetchImpl);
+      } catch (error) {
+        const code = error instanceof JiraBoardError && error.code in LINK_MESSAGES
+          ? (error.code as keyof typeof LINK_MESSAGES)
+          : "jira_unavailable";
+        return reply.code(jiraStatus(code)).send({ code, message: LINK_MESSAGES[code] });
+      }
+      jira = config;
+    }
+
     try {
-      const room = await store.create(request.body?.id ?? "");
+      const room = await store.create(id, jira);
       return reply.code(201).send({ id: room.id });
     } catch (error) {
-      const code = error instanceof Error ? error.message : "invalid_room_id";
-      const status = code === "room_exists" ? 409 : 400;
-      return reply.code(status).send({
-        code,
-        message: ERROR_MESSAGES[code as keyof typeof ERROR_MESSAGES] ?? ERROR_MESSAGES.invalid_room_id,
-      });
+      const code = error instanceof Error && error.message === "room_exists" ? "room_exists" : "invalid_room_id";
+      return sendRoomError(reply, code);
     }
   });
 
   app.get<{ Params: { id: string } }>("/rooms/:id", async (request, reply) => {
     const id = normalizeRoomId(request.params.id);
     if (!isValidRoomId(id)) {
-      return reply.code(400).send({
-        code: "invalid_room_id",
-        message: ERROR_MESSAGES.invalid_room_id,
-      });
+      return sendRoomError(reply, "invalid_room_id");
     }
     const exists = await store.exists(id);
     if (!exists) {
-      return reply.code(404).send({
-        code: "room_not_found",
-        message: ERROR_MESSAGES.room_not_found,
-      });
+      return sendRoomError(reply, "room_not_found");
     }
     return { id, exists: true };
   });
 
-  app.get("/board/issues", async (_request, reply) => {
+  async function roomJira(reply: FastifyReply, roomId: string): Promise<JiraConfig | null> {
+    const jira = await store.getJira(roomId);
     if (!jira) {
-      return reply.code(503).send({
-        code: "jira_not_configured",
-        message: JIRA_MESSAGES.jira_not_configured,
-      });
+      reply.code(409).send({ code: "jira_not_linked", message: JIRA_MESSAGES.jira_not_linked });
+    }
+    return jira;
+  }
+
+  app.get<{ Params: { id: string } }>("/rooms/:id/board/issues", async (request, reply) => {
+    const jira = await roomJira(reply, request.params.id);
+    if (!jira) {
+      return reply;
     }
     try {
-      const tasks = await loadBoardTasks(jira);
+      const tasks = await loadBoardTasks(jira, fetchImpl);
       return { tasks };
     } catch (error) {
       return sendJiraError(reply, error, JIRA_MESSAGES.jira_unavailable);
     }
   });
 
-  app.get<{ Params: { key: string } }>("/board/issues/:key", async (request, reply) => {
+  app.get<{ Params: { id: string; key: string } }>("/rooms/:id/board/issues/:key", async (request, reply) => {
+    const jira = await roomJira(reply, request.params.id);
     if (!jira) {
-      return reply.code(503).send({
-        code: "jira_not_configured",
-        message: JIRA_MESSAGES.jira_not_configured,
-      });
+      return reply;
     }
     try {
-      return await loadBoardTaskDetail(jira, request.params.key);
+      return await loadBoardTaskDetail(jira, request.params.key, fetchImpl);
     } catch (error) {
       return sendJiraError(reply, error, "No se ha podido cargar el detalle de la tarea.");
     }
   });
 
-  app.get<{ Params: { key: string; attachmentId: string } }>(
-    "/board/issues/:key/attachments/:attachmentId",
-    async (request, reply) => sendAttachment(reply, jira, request.params, "content"),
+  app.get<{ Params: { id: string; key: string; attachmentId: string } }>(
+    "/rooms/:id/board/issues/:key/attachments/:attachmentId",
+    async (request, reply) => sendAttachment(reply, await roomJira(reply, request.params.id), request.params, "content"),
   );
 
-  app.get<{ Params: { key: string; attachmentId: string } }>(
-    "/board/issues/:key/attachments/:attachmentId/thumbnail",
-    async (request, reply) => sendAttachment(reply, jira, request.params, "thumbnail"),
+  app.get<{ Params: { id: string; key: string; attachmentId: string } }>(
+    "/rooms/:id/board/issues/:key/attachments/:attachmentId/thumbnail",
+    async (request, reply) =>
+      sendAttachment(reply, await roomJira(reply, request.params.id), request.params, "thumbnail"),
   );
 
-  app.put<{ Params: { key: string }; Body: { points?: unknown } }>(
-    "/board/issues/:key/estimate",
+  app.put<{ Params: { id: string; key: string }; Body: { points?: unknown } }>(
+    "/rooms/:id/board/issues/:key/estimate",
     async (request, reply) => {
+      const jira = await roomJira(reply, request.params.id);
       if (!jira) {
-        return reply.code(503).send({
-          code: "jira_not_configured",
-          message: JIRA_MESSAGES.jira_not_configured,
-        });
+        return reply;
       }
       const points = request.body?.points;
       if (typeof points !== "number" || !isFibonacciEstimate(points)) {
@@ -130,37 +169,34 @@ export function registerHttp(app: FastifyInstance, store: RoomStore, jira: JiraC
         });
       }
       try {
-        await assignStoryPoints(jira, request.params.key, points);
+        await assignStoryPoints(jira, request.params.key, points, fetchImpl);
         return reply.code(204).send();
       } catch (error) {
         return sendJiraError(reply, error, "No se ha podido asignar la estimación.");
       }
     },
   );
-}
 
-async function sendAttachment(
-  reply: FastifyReply,
-  jira: JiraConfig | null,
-  params: { key: string; attachmentId: string },
-  variant: "content" | "thumbnail",
-) {
-  if (!jira) {
-    return reply.code(503).send({
-      code: "jira_not_configured",
-      message: JIRA_MESSAGES.jira_not_configured,
-    });
-  }
-  try {
-    const file = await loadBoardTaskAttachment(jira, params.key, params.attachmentId, variant);
-    return reply
-      .header("X-Content-Type-Options", "nosniff")
-      .header("Cache-Control", "private, max-age=300")
-      .header("Content-Disposition", inlineDisposition(file.filename))
-      .type(file.mimeType)
-      .send(file.bytes);
-  } catch (error) {
-    return sendJiraError(reply, error, "No se ha podido abrir el adjunto.");
+  async function sendAttachment(
+    reply: FastifyReply,
+    jira: JiraConfig | null,
+    params: { key: string; attachmentId: string },
+    variant: "content" | "thumbnail",
+  ) {
+    if (!jira) {
+      return reply;
+    }
+    try {
+      const file = await loadBoardTaskAttachment(jira, params.key, params.attachmentId, variant, fetchImpl);
+      return reply
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Cache-Control", "private, max-age=300")
+        .header("Content-Disposition", inlineDisposition(file.filename))
+        .type(file.mimeType)
+        .send(file.bytes);
+    } catch (error) {
+      return sendJiraError(reply, error, "No se ha podido abrir el adjunto.");
+    }
   }
 }
 

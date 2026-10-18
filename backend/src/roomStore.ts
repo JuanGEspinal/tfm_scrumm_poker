@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import {
   createEmptyRoom,
+  isChatMessage,
   isValidRoomId,
   normalizeRoomId,
+  type ChatMessage,
   type Room,
 } from "@scrum-poker/shared";
 import type { Redis } from "ioredis";
+import type { JiraConfig } from "./jiraBoard.js";
 
 const TTL_SECONDS = 60 * 60 * 2;
 const LOCK_TTL_MS = 2000;
@@ -19,6 +22,14 @@ return 0`;
 
 export function roomKey(roomId: string): string {
   return `room:${roomId}`;
+}
+
+export function roomJiraKey(roomId: string): string {
+  return `room:${roomId}:jira`;
+}
+
+export function roomChatKey(roomId: string): string {
+  return `room:${roomId}:chat`;
 }
 
 export class RoomStore {
@@ -35,10 +46,15 @@ export class RoomStore {
   }
 
   async save(room: Room): Promise<void> {
-    await this.redis.set(roomKey(room.id), JSON.stringify(room), "EX", TTL_SECONDS);
+    await this.redis
+      .multi()
+      .set(roomKey(room.id), JSON.stringify(room), "EX", TTL_SECONDS)
+      .expire(roomJiraKey(room.id), TTL_SECONDS)
+      .expire(roomChatKey(room.id), TTL_SECONDS)
+      .exec();
   }
 
-  async create(rawId: string): Promise<Room> {
+  async create(rawId: string, jira?: JiraConfig): Promise<Room> {
     const id = normalizeRoomId(rawId);
     if (!isValidRoomId(id)) {
       throw new Error("invalid_room_id");
@@ -47,9 +63,51 @@ export class RoomStore {
     if (existing) {
       throw new Error("room_exists");
     }
-    const room = createEmptyRoom(id);
-    await this.save(room);
+    const room = createEmptyRoom(id, jira !== undefined);
+    const write = this.redis.multi().set(roomKey(id), JSON.stringify(room), "EX", TTL_SECONDS);
+    if (jira) {
+      write.set(roomJiraKey(id), JSON.stringify(jira), "EX", TTL_SECONDS);
+    } else {
+      write.del(roomJiraKey(id));
+    }
+    await write.exec();
     return room;
+  }
+
+  async getJira(roomId: string): Promise<JiraConfig | null> {
+    const id = normalizeRoomId(roomId);
+    if (!isValidRoomId(id)) {
+      return null;
+    }
+    const raw = await this.redis.get(roomJiraKey(id));
+    return raw ? (JSON.parse(raw) as JiraConfig) : null;
+  }
+
+  async listChat(roomId: string): Promise<ChatMessage[]> {
+    const id = normalizeRoomId(roomId);
+    if (!isValidRoomId(id)) {
+      return [];
+    }
+    const raw = await this.redis.lrange(roomChatKey(id), 0, -1);
+    return raw.flatMap((item) => {
+      try {
+        const parsed: unknown = JSON.parse(item);
+        return isChatMessage(parsed) ? [parsed] : [];
+      } catch {
+        return [];
+      }
+    });
+  }
+
+  async appendChat(roomId: string, message: ChatMessage): Promise<void> {
+    const id = normalizeRoomId(roomId);
+    await this.redis
+      .multi()
+      .rpush(roomChatKey(id), JSON.stringify(message))
+      .expire(roomChatKey(id), TTL_SECONDS)
+      .expire(roomKey(id), TTL_SECONDS)
+      .expire(roomJiraKey(id), TTL_SECONDS)
+      .exec();
   }
 
   async exists(rawId: string): Promise<boolean> {

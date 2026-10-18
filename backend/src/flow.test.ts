@@ -1,7 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { io as ioClient, type Socket } from "socket.io-client";
 import { Redis } from "ioredis";
-import { CLIENT_EVENTS, SERVER_EVENTS, isAvatarId, type RoomState } from "@scrum-poker/shared";
+import {
+  CLIENT_EVENTS,
+  SERVER_EVENTS,
+  isAvatarId,
+  type ChatHistoryPayload,
+  type ChatMessagePayload,
+  type RoomError,
+  type RoomState,
+} from "@scrum-poker/shared";
 import { buildApp } from "./app.js";
 
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
@@ -124,4 +132,96 @@ describe("socket flow", () => {
     a.close();
     b.close();
   });
+
+  it("keeps chat history for the room and rejects an empty message", async () => {
+    const roomId = `chat-test-${Date.now()}`;
+    const created = await fetch(`${origin}/rooms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: roomId }),
+    });
+    expect(created.status).toBe(201);
+
+    const a = ioClient(origin);
+    const b = ioClient(origin);
+    await waitForConnect(a);
+    await waitForConnect(b);
+
+    const aJoined = waitForState(a, (state) => state.users.some((user) => user.displayName === "Ana"));
+    a.emit(CLIENT_EVENTS.join, { roomId, displayName: "Ana", avatar: "bernard" });
+    await aJoined;
+
+    const empty = waitForError(a, (error) => error.code === "invalid_message");
+    a.emit(CLIENT_EVENTS.sendChat, { text: "   " });
+    expect((await empty).code).toBe("invalid_message");
+
+    const delivered = waitForChatMessage(b, (payload) => payload.message.text.includes("acta"));
+    const bJoined = waitForState(b, (state) => state.users.length === 2);
+    b.emit(CLIENT_EVENTS.join, { roomId, displayName: "Bruno", avatar: "stan" });
+    await bJoined;
+    a.emit(CLIENT_EVENTS.sendChat, { text: "Mirad [acta](https://docs.example.com/acta.pdf)" });
+    const live = await delivered;
+    expect(live.message.displayName).toBe("Ana");
+    expect(live.message.avatar).toBe("bernard");
+
+    a.close();
+    b.close();
+
+    const late = ioClient(origin);
+    await waitForConnect(late);
+    const history = waitForChatHistory(late, (payload) => payload.messages.length === 1);
+    late.emit(CLIENT_EVENTS.join, { roomId, displayName: "Celia", avatar: "elaine" });
+    const stored = await history;
+    expect(stored.messages[0]?.text).toContain("https://docs.example.com/acta.pdf");
+    expect(stored.messages[0]?.displayName).toBe("Ana");
+    late.close();
+  });
 });
+
+function waitForChatMessage(
+  socket: Socket,
+  predicate: (payload: ChatMessagePayload) => boolean,
+): Promise<ChatMessagePayload> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout waiting for chat message")), 4000);
+    const handler = (payload: ChatMessagePayload) => {
+      if (predicate(payload)) {
+        clearTimeout(timer);
+        socket.off(SERVER_EVENTS.chatMessage, handler);
+        resolve(payload);
+      }
+    };
+    socket.on(SERVER_EVENTS.chatMessage, handler);
+  });
+}
+
+function waitForChatHistory(
+  socket: Socket,
+  predicate: (payload: ChatHistoryPayload) => boolean,
+): Promise<ChatHistoryPayload> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout waiting for chat history")), 4000);
+    const handler = (payload: ChatHistoryPayload) => {
+      if (predicate(payload)) {
+        clearTimeout(timer);
+        socket.off(SERVER_EVENTS.chatHistory, handler);
+        resolve(payload);
+      }
+    };
+    socket.on(SERVER_EVENTS.chatHistory, handler);
+  });
+}
+
+function waitForError(socket: Socket, predicate: (error: RoomError) => boolean): Promise<RoomError> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout waiting for room error")), 4000);
+    const handler = (error: RoomError) => {
+      if (predicate(error)) {
+        clearTimeout(timer);
+        socket.off(SERVER_EVENTS.error, handler);
+        resolve(error);
+      }
+    };
+    socket.on(SERVER_EVENTS.error, handler);
+  });
+}

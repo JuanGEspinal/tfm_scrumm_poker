@@ -3,9 +3,11 @@ import { computed, ref } from "vue";
 import {
   CLIENT_EVENTS,
   SERVER_EVENTS,
+  normalizeChatText,
   type AvatarId,
   type BoardTask,
   type CardValue,
+  type ChatMessage,
   type RoomError,
   type RoomState,
 } from "@scrum-poker/shared";
@@ -16,6 +18,9 @@ export const useRoomStore = defineStore("room", () => {
   const error = ref<string | null>(null);
   const selectedCard = ref<CardValue | null>(null);
   const selfName = ref("");
+  const messages = ref<ChatMessage[]>([]);
+  const unread = ref(0);
+  let chatPanelOpen = false;
   let socket: AppSocket | null = null;
   let credentials: { roomId: string; displayName: string; avatar: AvatarId } | null = null;
   let pendingTask: BoardTask | null = null;
@@ -65,7 +70,32 @@ export const useRoomStore = defineStore("room", () => {
       }
       error.value = payload.message;
     });
+    socket.on(SERVER_EVENTS.chatHistory, (payload) => {
+      messages.value = payload.messages;
+    });
+    socket.on(SERVER_EVENTS.chatMessage, (payload) => {
+      messages.value = [...messages.value, payload.message];
+      const own = payload.message.displayName.toLowerCase() === selfName.value.toLowerCase();
+      if (!chatPanelOpen && !own) {
+        unread.value += 1;
+      }
+    });
     return socket;
+  }
+
+  function setChatPanelOpen(open: boolean) {
+    chatPanelOpen = open;
+    if (open) {
+      unread.value = 0;
+    }
+  }
+
+  function sendChat(text: string) {
+    const normalized = normalizeChatText(text);
+    if (!normalized) {
+      return;
+    }
+    ensureSocket().emit(CLIENT_EVENTS.sendChat, { text: normalized });
   }
 
   function join(roomId: string, displayName: string, avatar: AvatarId) {
@@ -111,6 +141,9 @@ export const useRoomStore = defineStore("room", () => {
     state.value = null;
     selectedCard.value = null;
     error.value = null;
+    messages.value = [];
+    unread.value = 0;
+    chatPanelOpen = false;
   }
 
   return {
@@ -118,11 +151,15 @@ export const useRoomStore = defineStore("room", () => {
     error,
     selectedCard,
     revealed,
+    messages,
+    unread,
     join,
     vote,
     selectTask,
     reveal,
     resetRound,
+    sendChat,
+    setChatPanelOpen,
     disconnect,
   };
 });
