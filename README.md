@@ -50,18 +50,6 @@ npm test    # pruebas de dominio, servidor e interfaz
 npm run build
 ```
 
-Antes de cada `git push`, un hook ejecuta las pruebas.
 
-## Papel de la IA
 
-El código se ha escrito en Cursor, con un agente de IA como pareja de programación. La persona marca qué hay que hacer y revisa el resultado; el agente propone el diseño, escribe el código y lo corrige.
 
-Concreto:
-
-- Al empezar, se descartó Firebase. El agente dejó la arquitectura en Vue, Fastify, Socket.IO y Redis, y la documentó en `AGENTS.md` y en skills de Cursor (dominio, interfaz, tiempo real y pruebas) para que las sesiones siguientes respeten las mismas reglas.
-- Implementó el flujo de sala (unirse, votar, revelar, media, nueva ronda), avatares, chat, vínculo con Jira, selección de tarea, adjuntos y asignación de la estimación.
-- Ajustó maquetación de escritorio y móvil, el logotipo y textos.
-- Corrigió fallos concretos: cartas bloqueadas al volver a entrar, la tarea seleccionada que no se veía en el resto de la sala, y el error de red al crear una sala.
-- Añadió pruebas con Vitest y el hook que las lanza antes del push.
-
-Las decisiones de producto (escala Fibonacci, duración de las salas, credenciales de Jira por sala, chat solo dentro de la sala) las confirmó la persona. La IA no sustituye esa revisión: acelera la implementación y mantiene las convenciones del proyecto.
