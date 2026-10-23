@@ -10,11 +10,6 @@ En la sala también hay un chat para comentar y compartir enlaces. Si la sala se
 
 Las salas vacías se conservan en Redis unas 2 horas, así que se puede recargar y volver a entrar.
 
-## Repositorio
-
-https://github.com/JuanGEspinal/tfm_scrumm_poker
-
-Rama principal: `main`.
 
 ## Tecnología
 
